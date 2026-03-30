@@ -64,7 +64,3 @@ La autenticación es delegada a **Microsoft 365**. El sistema define tres roles:
 - Listas de SharePoint vía Graph API y expone los datos como dataset.
 - Los reportes se publican en Power BI Online y se embeben directamente en la interfaz SPFx.
 - Métricas planificadas: expedientes por estado, por área, por período y por contratista.
-
-## 📄 Licencia
-
-Proyecto académico — Ingeniería Civil en Informática, 2026.
