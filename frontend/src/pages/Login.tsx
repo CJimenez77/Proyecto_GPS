@@ -17,7 +17,7 @@ export default function Login() {
     try {
       const response = await api.login(username, password);
       localStorage.setItem('token', response.token);
-      localStorage.setItem('usuario', JSON.stringify(response.usuario));
+      localStorage.setItem('usuario', JSON.stringify(response.user));
       navigate('/');
     } catch {
       setError('Credenciales inválidas');
