@@ -47,10 +47,10 @@ export const api = {
     request(`${API_USUARIOS}/usuarios/${id}`, { method: 'DELETE' }),
 
   getExpedientes: (): Promise<Expediente[]> =>
-    request(`${API_EXPEDIENTES}/expediente`),
+    request(`${API_EXPEDIENTES}/expedientes`),
 
   createExpediente: (data: Omit<Expediente, 'id' | 'created_at' | 'updated_at'>): Promise<Expediente> =>
-    request(`${API_EXPEDIENTES}/expediente`, {
+    request(`${API_EXPEDIENTES}/expedientes`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),
