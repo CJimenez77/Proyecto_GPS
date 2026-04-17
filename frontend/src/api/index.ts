@@ -22,10 +22,10 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  login: (email: string, password: string): Promise<LoginResponse> =>
+  login: (username: string, password: string): Promise<LoginResponse> =>
     request(`${API_USUARIOS}/login`, {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ username, password }),
     }),
 
   getUsuarios: (): Promise<Usuario[]> =>

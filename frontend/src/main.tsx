@@ -7,14 +7,17 @@ import Dashboard from './pages/Dashboard'
 import Expedientes from './pages/Expedientes'
 import Usuarios from './pages/Usuarios'
 import Layout from './components/Layout'
+import AuthGuard from './components/AuthGuard'
 import './index.css'
 
 const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
-  { path: '/', element: <Layout />, children: [
-    { index: true, element: <Dashboard /> },
-    { path: 'expedientes', element: <Expedientes /> },
-    { path: 'usuarios', element: <Usuarios /> }
+  { path: '/', element: <AuthGuard />, children: [
+    { element: <Layout />, children: [
+      { index: true, element: <Dashboard /> },
+      { path: 'expedientes', element: <Expedientes /> },
+      { path: 'usuarios', element: <Usuarios /> }
+    ]}
   ]}
 ])
 
