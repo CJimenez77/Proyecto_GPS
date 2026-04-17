@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import jwt from 'jsonwebtoken';
+import jwt, { JwtPayload } from 'jsonwebtoken';
 import pkg from 'pg';
 const { Pool } = pkg;
 
@@ -78,7 +78,7 @@ const authenticateToken = (req: Request, res: Response, next: express.NextFuncti
     return;
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, JWT_SECRET, (err: Error | null, user: string | JwtPayload | undefined) => {
     if (err) {
       res.status(403).json({ error: 'Token inválido' });
       return;
