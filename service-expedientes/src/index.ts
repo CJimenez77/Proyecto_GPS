@@ -177,7 +177,6 @@ app.post('/expedientes', authenticateToken, async (req: Request, res: Response):
 app.put('/expedientes/:id', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const user = (req as Request & { user: User }).user;
     const { titulo, descripcion, estado, area_id, contratista_id } = req.body;
 
     const updates: string[] = [];
