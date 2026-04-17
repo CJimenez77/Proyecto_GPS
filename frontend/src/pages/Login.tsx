@@ -4,7 +4,7 @@ import { Button, Input, Field, Text } from '@fluentui/react-components';
 import { api } from '../api';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -15,9 +15,9 @@ export default function Login() {
     setLoading(true);
     setError('');
     try {
-      const response = await api.login(email, password);
+      const response = await api.login(username, password);
       localStorage.setItem('token', response.token);
-      localStorage.setItem('usuario', JSON.stringify(response.usuario));
+      localStorage.setItem('usuario', JSON.stringify(response.user));
       navigate('/');
     } catch {
       setError('Credenciales inválidas');
@@ -49,12 +49,11 @@ export default function Login() {
             {error}
           </Text>
         )}
-        <Field label="Email">
+        <Field label="Usuario">
           <Input
-            type="email"
-            value={email}
-            onChange={(e, data) => setEmail(data.value)}
-            placeholder="admin@ejemplo.cl"
+            value={username}
+            onChange={(e, data) => setUsername(data.value)}
+            placeholder="admin"
             required
           />
         </Field>

@@ -32,7 +32,13 @@ export default function Dashboard() {
 
   useEffect(() => {
     const stored = localStorage.getItem('usuario');
-    if (stored) setUsuario(JSON.parse(stored));
+    if (stored && stored !== 'undefined') {
+      try {
+        setUsuario(JSON.parse(stored));
+      } catch {
+        localStorage.removeItem('usuario');
+      }
+    }
     api.getExpedientes().then(setExpedientes).catch(console.error);
   }, []);
 
