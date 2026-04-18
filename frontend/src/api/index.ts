@@ -1,7 +1,8 @@
 import { LoginResponse, Usuario, Expediente, Contratista, Area } from '../entities';
 
-const API_USUARIOS = 'http://localhost:3001';
-const API_EXPEDIENTES = 'http://localhost:3002';
+const API_BASE = '';
+const API_USUARIOS = `${API_BASE}/api/usuarios`;
+const API_EXPEDIENTES = `${API_BASE}/api/expedientes`;
 
 function getToken(): string | null {
   return localStorage.getItem('token');

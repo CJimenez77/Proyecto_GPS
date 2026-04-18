@@ -17,6 +17,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - gps-network
 
   service-usuarios:
     build:
@@ -31,11 +33,11 @@ services:
       DB_USER: postgres
       DB_PASSWORD: postgres
       JWT_SECRET: dev-secret-key
-    ports:
-      - "3001:3001"
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - gps-network
 
   service-expedientes:
     build:
@@ -50,11 +52,31 @@ services:
       DB_USER: postgres
       DB_PASSWORD: postgres
       JWT_SECRET: dev-secret-key
-    ports:
-      - "3002:3002"
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - gps-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: gps_frontend
+    ports:
+      - "80:80"
+    environment:
+      VITE_API_USUARIOS: http://service-usuarios:3001
+      VITE_API_EXPEDIENTES: http://service-expedientes:3002
+    depends_on:
+      - service-usuarios
+      - service-expedientes
+    networks:
+      - gps-network
+
+networks:
+  gps-network:
+    driver: bridge
 
 volumes:
   postgres_data:
