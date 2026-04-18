@@ -28,6 +28,10 @@ export default function Usuarios() {
   );
 
   const handleSave = async () => {
+    if (!form.nombre || !form.email || !form.password) {
+      alert('Completar todos los campos');
+      return;
+    }
     try {
       if (editId) {
         const updated = await api.updateUsuario(editId, form);
@@ -40,7 +44,8 @@ export default function Usuarios() {
       setForm({ nombre: '', email: '', rol: 'colaborador', password: '' });
       setEditId(null);
     } catch (e) {
-      console.error(e);
+      console.error('Error:', e);
+      alert('Error al guardar usuario');
     }
   };
 

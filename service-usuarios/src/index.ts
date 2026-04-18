@@ -159,11 +159,15 @@ app.get('/usuarios/:id', authenticateToken, async (req: Request, res: Response):
 
 app.post('/usuarios', authenticateToken, isAdmin, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { username, password, nombre, email, rol = 'lector' } = req.body;
+    let { username, password, nombre, email, rol = 'lector' } = req.body;
 
-    if (!username || !password || !nombre || !email) {
+    if (!password || !nombre || !email) {
       res.status(400).json({ error: 'Todos los campos son requeridos' });
       return;
+    }
+
+    if (!username) {
+      username = nombre.toLowerCase().replace(/\s+/g, '_');
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
