@@ -67,7 +67,42 @@ const initDb = async () => {
     )
   `);
   console.log('Tablas de expedientes inicializadas');
+  
+  await pool.query(`
+    INSERT INTO contratistas (nombre, rut, direccion, telefono, estado)
+    SELECT 'Empresa Demo', '12345678-9', 'Av. Principal 123', '+56 2 21234567', 'activo'
+    WHERE NOT EXISTS (SELECT 1 FROM contratistas WHERE rut = '12345678-9')
+  `);
+
+  await pool.query(`
+    INSERT INTO areas (nombre, contratista_id, estado)
+    SELECT 'Area Demo', 1, 'activo'
+    WHERE NOT EXISTS (SELECT 1 FROM areas WHERE nombre = 'Area Demo')
+  `);
+
+  console.log('Datos de ejemplo inicializados');
 };
+
+app.get('/seed', async (req: Request, res: Response): Promise<void> => {
+  try {
+    await pool.query(`
+      INSERT INTO contratistas (nombre, rut, direccion, telefono, estado)
+      SELECT 'Empresa Demo', '12345678-9', 'Av. Principal 123', '+56 2 21234567', 'activo'
+      WHERE NOT EXISTS (SELECT 1 FROM contratistas WHERE rut = '12345678-9')
+    `);
+
+    await pool.query(`
+      INSERT INTO areas (nombre, contratista_id, estado)
+      SELECT 'Area Demo', 1, 'activo'
+      WHERE NOT EXISTS (SELECT 1 FROM areas WHERE nombre = 'Area Demo')
+    `);
+
+    res.json({ message: 'Seed completado' });
+  } catch (error) {
+    console.error('Error en seed:', error);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
 
 interface User {
   id: number;
