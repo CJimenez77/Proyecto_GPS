@@ -31,8 +31,6 @@ services:
       DB_USER: postgres
       DB_PASSWORD: postgres
       JWT_SECRET: dev-secret-key
-    ports:
-      - "3001:3001"
     depends_on:
       postgres:
         condition: service_healthy
@@ -50,11 +48,20 @@ services:
       DB_USER: postgres
       DB_PASSWORD: postgres
       JWT_SECRET: dev-secret-key
-    ports:
-      - "3002:3002"
     depends_on:
       postgres:
         condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: gps_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - service-usuarios
+      - service-expedientes
 
 volumes:
   postgres_data:
