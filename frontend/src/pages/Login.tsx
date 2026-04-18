@@ -75,7 +75,7 @@ export default function Login() {
           {loading ? 'Iniciando...' : 'Iniciar Sesión'}
         </Button>
         <Text block style={{ marginTop: 16, textAlign: 'center', fontSize: 12, color: 'gray' }}>
-          Credenciales: admin / admin123
+          Credenciales:
         </Text>
       </form>
     </div>
