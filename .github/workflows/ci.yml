@@ -147,6 +147,7 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/gps-frontend:latest
+<<<<<<< HEAD
             ${{ secrets.DOCKERHUB_USERNAME }}/gps-frontend:${{ github.sha }}
 
       # Actualización automática en el servidor universitario
@@ -162,3 +163,6 @@ jobs:
             docker-compose pull
             docker-compose up -d --remove-orphans
             docker image prune -f
+=======
+            ${{ secrets.DOCKERHUB_USERNAME }}/gps-frontend:${{ github.sha }}
+>>>>>>> aabd20fd75aa71bcf9df9a6ca3f1aecd494a04c2

@@ -6,8 +6,11 @@ dist
 !.env.example
 .DS_Store
 *.test.ts
+*.test.tsx
 coverage
 .git
 .gitignore
 README.md
 *.md
+.vscode
+.idea
