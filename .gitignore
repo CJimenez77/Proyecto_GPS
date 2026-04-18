@@ -8,3 +8,6 @@ dist
 coverage
 .vscode
 .idea
+AGENTS.md
+CONTEXT.md
+test-login.json
