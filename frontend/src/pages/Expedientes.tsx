@@ -31,13 +31,18 @@ export default function Expedientes() {
   );
 
   const handleCreate = async () => {
+    if (!form.titulo || !form.contratista_id || !form.area_id) {
+      alert('Completar todos los campos');
+      return;
+    }
     try {
       const nuevo = await api.createExpediente({ ...form, estado: 'borrador' as const });
       setExpedientes([...expedientes, nuevo]);
       setIsDrawerOpen(false);
       setForm({ titulo: '', descripcion: '', area_id: 0, contratista_id: 0 });
     } catch (e) {
-      console.error(e);
+      console.error('Error al crear:', e);
+      alert('Error al crear expediente');
     }
   };
 
