@@ -10,7 +10,13 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key';
+
+if (!process.env.JWT_SECRET) {
+  console.error('ERROR: JWT_SECRET no está definido en las variables de entorno');
+  process.exit(1);
+}
+
+const JWT_SECRET = process.env.JWT_SECRET;
 
 app.use(cors());
 app.use(express.json());
