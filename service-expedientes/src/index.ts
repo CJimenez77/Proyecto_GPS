@@ -67,7 +67,7 @@ const initDb = async () => {
     )
   `);
   console.log('Tablas de expedientes inicializadas');
-  
+
   await pool.query(`
     INSERT INTO contratistas (nombre, rut, direccion, telefono, estado)
     SELECT 'Empresa Demo', '12345678-9', 'Av. Principal 123', '+56 2 21234567', 'activo'
@@ -132,7 +132,7 @@ const authenticateToken = (req: Request, res: Response, next: express.NextFuncti
 app.get('/expedientes', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
     const { estado, area, contratista, limit = 50, offset = 0 } = req.query;
-    
+
     let query = `
       SELECT e.id, e.titulo, e.descripcion, e.estado, e.created_at,
              c.nombre as contratista_nombre, c.id as contratista_id,
@@ -254,7 +254,7 @@ app.put('/expedientes/:id', authenticateToken, async (req: Request, res: Respons
   }
 });
 
-app.delete('/expediente/:id', authenticateToken, async (req: Request, res: Response): Promise<void> => {
+app.delete('/expedientes/:id', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const result = await pool.query('DELETE FROM expediente WHERE id = $1 RETURNING id', [id]);
@@ -307,13 +307,13 @@ app.get('/areas', authenticateToken, async (req: Request, res: Response): Promis
     const { contratista_id } = req.query;
     let query = 'SELECT * FROM areas WHERE estado = $1';
     const values: (string | number)[] = ['activo'];
-    
+
     if (contratista_id) {
       query += ' AND contratista_id = $2';
       values.push(parseInt(contratista_id as string));
     }
     query += ' ORDER BY nombre';
-    
+
     const result = await pool.query(query, values);
     res.json(result.rows);
   } catch (error) {
