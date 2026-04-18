@@ -3,8 +3,13 @@ dist
 *.log
 .env
 .env.local
+.env.*
+!.env.example
 .DS_Store
 *.tgz
 coverage
 .vscode
 .idea
+AGENTS.md
+CONTEXT.md
+test-login.json
