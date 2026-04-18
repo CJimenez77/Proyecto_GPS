@@ -24,8 +24,8 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
-    location /api/usuarios {
-        proxy_pass http://service-usuarios:3001;
+    location /api/usuarios/ {
+        proxy_pass http://service-usuarios:3001/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -36,8 +36,8 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 
-    location /api/expedientes {
-        proxy_pass http://service-expedientes:3002;
+    location /api/expedientes/ {
+        proxy_pass http://service-expedientes:3002/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
