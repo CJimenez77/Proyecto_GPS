@@ -191,7 +191,7 @@ app.get('/expedientes/:id/url', authenticateToken, async (req: Request, res: Res
     // Para URLs pre-firmadas que se usan en el navegador, el S3Client debe usar el endpoint público (localhost)
     // porque la firma HMAC incluye el Host header. Si se firma con "minio", fallará al abrirse en localhost.
     const publicS3 = new S3Client({
-      endpoint: `http://${process.env.MINIO_PUBLIC_ENDPOINT || 'localhost'}:${process.env.MINIO_PORT || '9000'}`,
+      endpoint: `http://${process.env.MINIO_PUBLIC_ENDPOINT || 'localhost'}:${process.env.MINIO_PUBLIC_PORT || '9000'}`,
       region: 'us-east-1',
       credentials: {
         accessKeyId: process.env.MINIO_ACCESS_KEY || 'minioadmin',
