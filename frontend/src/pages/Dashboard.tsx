@@ -3,26 +3,22 @@ import { Text, Badge, TabList, Tab } from '@fluentui/react-components';
 import { api } from '../api';
 import type { Expediente, Usuario } from '../entities';
 
-function getBadgeColor(estado: Expediente['estado']): "neutral" | "warning" | "informative" | "success" | "danger" {
-  const colors: Record<Expediente['estado'], "neutral" | "warning" | "informative" | "success" | "danger"> = {
-    borrador: 'neutral',
-    en_revision: 'warning',
-    en_aprobacion: 'informative',
-    cerrado: 'success',
-    rechazado: 'danger'
+function getBadgeColor(estado: string): "neutral" | "warning" | "success" | "danger" {
+  const colors: Record<string, "neutral" | "warning" | "success" | "danger"> = {
+    PENDIENTE: 'warning',
+    APROBADO: 'success',
+    RECHAZADO: 'danger'
   };
-  return colors[estado];
+  return colors[estado] || 'neutral';
 }
 
-function getBadgeText(estado: Expediente['estado']): string {
-  const texts: Record<Expediente['estado'], string> = {
-    borrador: 'Borrador',
-    en_revision: 'En Revisión',
-    en_aprobacion: 'En Aprobación',
-    cerrado: 'Cerrado',
-    rechazado: 'Rechazado'
+function getBadgeText(estado: string): string {
+  const texts: Record<string, string> = {
+    PENDIENTE: 'Pendiente de Revisión',
+    APROBADO: 'Aprobado',
+    RECHAZADO: 'Rechazado'
   };
-  return texts[estado];
+  return texts[estado] || estado;
 }
 
 export default function Dashboard() {
@@ -44,11 +40,9 @@ export default function Dashboard() {
 
   const stats = {
     total: expedientes.length,
-    borrador: expedientes.filter(e => e.estado === 'borrador').length,
-    enRevision: expedientes.filter(e => e.estado === 'en_revision').length,
-    enAprobacion: expedientes.filter(e => e.estado === 'en_aprobacion').length,
-    cerrado: expedientes.filter(e => e.estado === 'cerrado').length,
-    rechazado: expedientes.filter(e => e.estado === 'rechazado').length
+    pendiente: expedientes.filter(e => e.estado === 'PENDIENTE').length,
+    aprobado: expedientes.filter(e => e.estado === 'APROBADO').length,
+    rechazado: expedientes.filter(e => e.estado === 'RECHAZADO').length
   };
 
   const filteredExpedientes = selectedTab === 'todos' 
@@ -68,26 +62,18 @@ export default function Dashboard() {
         Dashboard - Bienvenido {usuario?.nombre || 'Usuario'}
       </Text>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 16, marginBottom: 32 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
         <div style={cardStyle}>
           <Text block style={{ color: 'gray' }}>Total</Text>
           <Text block size={600} weight="semibold">{stats.total}</Text>
         </div>
         <div style={cardStyle}>
-          <Text block style={{ color: 'gray' }}>Borrador</Text>
-          <Text block size={600} weight="semibold">{stats.borrador}</Text>
+          <Text block style={{ color: 'gray' }}>Pendientes</Text>
+          <Text block size={600} weight="semibold">{stats.pendiente}</Text>
         </div>
         <div style={cardStyle}>
-          <Text block style={{ color: 'gray' }}>En Revisión</Text>
-          <Text block size={600} weight="semibold">{stats.enRevision}</Text>
-        </div>
-        <div style={cardStyle}>
-          <Text block style={{ color: 'gray' }}>En Aprobación</Text>
-          <Text block size={600} weight="semibold">{stats.enAprobacion}</Text>
-        </div>
-        <div style={cardStyle}>
-          <Text block style={{ color: 'gray' }}>Cerrados</Text>
-          <Text block size={600} weight="semibold">{stats.cerrado}</Text>
+          <Text block style={{ color: 'gray' }}>Aprobados</Text>
+          <Text block size={600} weight="semibold">{stats.aprobado}</Text>
         </div>
         <div style={cardStyle}>
           <Text block style={{ color: 'gray' }}>Rechazados</Text>
@@ -99,11 +85,9 @@ export default function Dashboard() {
         <Text weight="semibold" size={400} block style={{ marginBottom: 16 }}>Expedientes Recientes</Text>
         <TabList selectedValue={selectedTab} onTabSelect={(_, data) => setSelectedTab(data.value as string)}>
           <Tab value="todos">Todos</Tab>
-          <Tab value="borrador">Borrador</Tab>
-          <Tab value="en_revision">En Revisión</Tab>
-          <Tab value="en_aprobacion">En Aprobación</Tab>
-          <Tab value="cerrado">Cerrado</Tab>
-          <Tab value="rechazado">Rechazado</Tab>
+          <Tab value="PENDIENTE">Pendientes</Tab>
+          <Tab value="APROBADO">Aprobados</Tab>
+          <Tab value="RECHAZADO">Rechazados</Tab>
         </TabList>
         <div style={{ marginTop: 16 }}>
           {filteredExpedientes.length === 0 ? (
@@ -119,7 +103,7 @@ export default function Dashboard() {
               }}>
                 <div>
                   <Text weight="semibold">{exp.titulo}</Text>
-                  <Text block style={{ color: 'gray', fontSize: 12 }}>{exp.descripcion}</Text>
+                  <Text block style={{ color: 'gray', fontSize: 12 }}>Versión {exp.version}</Text>
                 </div>
                 <Badge appearance="filled" color={getBadgeColor(exp.estado)}>
                   {getBadgeText(exp.estado)}

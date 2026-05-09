@@ -42,7 +42,7 @@ export default function Login() {
         width: 400
       }}>
         <Text weight="semibold" size={600} block style={{ marginBottom: 24, textAlign: 'center' }}>
-          GPS - Iniciar Sesión
+          Sistema de Gestión Documental - Iniciar Sesión
         </Text>
         {error && (
           <Text block style={{ color: '#d13438', marginBottom: 16 }}>

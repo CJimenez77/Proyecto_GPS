@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15-alpine
@@ -10,18 +8,57 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gps_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - gps-network
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: gps_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "8031:9000"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    networks:
+      - gps-network
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: gps_minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
+      mc mb --ignore-existing local/expedientes-gps;
+      mc anonymous set none local/expedientes-gps;
+      echo 'Bucket expedientes-gps listo';
+      exit 0;
+      "
     networks:
       - gps-network
 
   service-usuarios:
-    build:
-      context: ./service-usuarios
-      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME}/gps-service-usuarios:latest
     container_name: gps_service_usuarios
     environment:
       PORT: 3001
@@ -36,14 +73,41 @@ services:
         condition: service_healthy
     networks:
       - gps-network
+    restart: unless-stopped
 
   service-expedientes:
-    build:
-      context: ./service-expedientes
-      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME}/gps-service-expedientes:latest
     container_name: gps_service_expedientes
     environment:
       PORT: 3002
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: gps_db
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET}
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: expedientes-gps
+      MINIO_USE_SSL: "false"
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-localhost}
+      MINIO_PUBLIC_PORT: ${MINIO_PUBLIC_PORT:-9000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - gps-network
+    restart: unless-stopped
+
+  service-mantenedores:
+    image: ${DOCKERHUB_USERNAME}/gps-service-mantenedores:latest
+    container_name: gps_service_mantenedores
+    environment:
+      PORT: 3003
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: gps_db
@@ -55,17 +119,37 @@ services:
         condition: service_healthy
     networks:
       - gps-network
+    restart: unless-stopped
+
+  service-tareas:
+    image: ${DOCKERHUB_USERNAME}/gps-service-tareas:latest
+    container_name: gps_service_tareas
+    environment:
+      PORT: 3004
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: gps_db
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - gps-network
+    restart: unless-stopped
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME}/gps-frontend:latest
     container_name: gps_frontend
     depends_on:
       - service-usuarios
       - service-expedientes
+      - service-mantenedores
+      - service-tareas
     networks:
       - gps-network
+    restart: unless-stopped
 
   nginx-proxy:
     image: nginx:alpine
@@ -78,8 +162,11 @@ services:
       - frontend
       - service-usuarios
       - service-expedientes
+      - service-mantenedores
+      - service-tareas
     networks:
       - gps-network
+    restart: unless-stopped
 
 networks:
   gps-network:
@@ -87,3 +174,4 @@ networks:
 
 volumes:
   postgres_data:
+  minio_data:

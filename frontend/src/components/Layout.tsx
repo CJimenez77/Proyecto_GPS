@@ -1,10 +1,12 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Button, Text } from '@fluentui/react-components';
-import { Home24Regular, Document24Regular, People24Regular, SignOut24Regular } from '@fluentui/react-icons';
+import { Button, Text, Avatar } from '@fluentui/react-components';
+import { Home24Regular, Document24Regular, People24Regular, SignOut24Regular, CheckmarkSquare24Regular, Settings24Regular } from '@fluentui/react-icons';
+import { getCurrentUser } from '../api';
 
 export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const user = getCurrentUser();
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -14,9 +16,17 @@ export default function Layout() {
 
   const navItems = [
     { path: '/', label: 'Dashboard', icon: <Home24Regular /> },
-    { path: '/expedientes', label: 'Expedientes', icon: <Document24Regular /> },
-    { path: '/usuarios', label: 'Usuarios', icon: <People24Regular /> },
+    { path: '/expedientes', label: 'Expedientes', icon: <Document24Regular /> }
   ];
+
+  if (user?.rol === 'revisor' || user?.rol === 'administrador') {
+    navItems.push({ path: '/tareas', label: 'Tareas', icon: <CheckmarkSquare24Regular /> });
+  }
+
+  if (user?.rol === 'administrador') {
+    navItems.push({ path: '/usuarios', label: 'Usuarios', icon: <People24Regular /> });
+    navItems.push({ path: '/mantenedores', label: 'Mantenedores', icon: <Settings24Regular /> });
+  }
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -29,7 +39,7 @@ export default function Layout() {
               appearance="subtle"
               onClick={() => navigate(item.path)}
               style={{
-                backgroundColor: location.pathname === item.path ? '#f0f0f0' : undefined
+                backgroundColor: location.pathname.startsWith(item.path) && (item.path !== '/' || location.pathname === '/') ? '#f0f0f0' : undefined
               }}
             >
               {item.icon}
@@ -37,9 +47,18 @@ export default function Layout() {
             </Button>
           ))}
         </div>
-        <Button appearance="subtle" icon={<SignOut24Regular />} onClick={handleLogout}>
-          Salir
-        </Button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Avatar name={user?.nombre || 'Usuario'} size={28} />
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <Text weight="semibold" size={200}>{user?.nombre}</Text>
+              <Text size={200} style={{ color: 'gray' }}>{user?.rol}</Text>
+            </div>
+          </div>
+          <Button appearance="subtle" icon={<SignOut24Regular />} onClick={handleLogout}>
+            Salir
+          </Button>
+        </div>
       </div>
       <main style={{ flex: 1, padding: 24, backgroundColor: '#f5f5f5' }}>
         <Outlet />

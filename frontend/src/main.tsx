@@ -6,9 +6,20 @@ import { FluentProvider, webLightTheme } from '@fluentui/react-components'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Expedientes from './pages/Expedientes'
+import ExpedienteDetail from './pages/ExpedienteDetail'
 import Usuarios from './pages/Usuarios'
+import Tareas from './pages/Tareas'
+import Mantenedores from './pages/Mantenedores'
 import Layout from './components/Layout'
 import './index.css'
+
+function getCurrentUserRole(): string | null {
+  try {
+    const stored = localStorage.getItem('usuario');
+    if (!stored) return null;
+    return JSON.parse(stored)?.rol ?? null;
+  } catch { return null; }
+}
 
 function PrivateRoutes() {
   const token = localStorage.getItem('token');
@@ -20,6 +31,15 @@ function PrivateRoutes() {
       <Outlet />
     </Layout>
   );
+}
+
+// Guard that only allows certain roles; redirects others to /
+function RoleRoute({ roles }: { roles: string[] }) {
+  const role = getCurrentUserRole();
+  if (!role || !roles.includes(role)) {
+    return <Navigate to="/" replace />;
+  }
+  return <Outlet />;
 }
 
 function App() {
@@ -40,7 +60,18 @@ function App() {
         <Route path="/" element={<PrivateRoutes />}>
           <Route index element={<Dashboard />} />
           <Route path="expedientes" element={<Expedientes />} />
-          <Route path="usuarios" element={<Usuarios />} />
+          <Route path="expedientes/:id" element={<ExpedienteDetail />} />
+
+          {/* Solo revisor y administrador */}
+          <Route element={<RoleRoute roles={['revisor', 'administrador']} />}>
+            <Route path="tareas" element={<Tareas />} />
+          </Route>
+
+          {/* Solo administrador */}
+          <Route element={<RoleRoute roles={['administrador']} />}>
+            <Route path="usuarios" element={<Usuarios />} />
+            <Route path="mantenedores" element={<Mantenedores />} />
+          </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

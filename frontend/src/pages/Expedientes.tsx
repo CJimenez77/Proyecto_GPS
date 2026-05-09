@@ -1,119 +1,331 @@
 import { useEffect, useState } from 'react';
-import { Button, Text, Badge, Input, Field, Drawer, DrawerHeader, DrawerBody, DrawerFooter } from '@fluentui/react-components';
-import { Add24Regular, Search24Regular } from '@fluentui/react-icons';
-import { api } from '../api';
-import type { Expediente, Area, Contratista } from '../entities';
+import { useNavigate } from 'react-router-dom';
+import { Button, Text, Badge, Input, Field, Drawer, DrawerHeader, DrawerBody, DrawerFooter, Spinner, Divider } from '@fluentui/react-components';
+import { Add24Regular, Search24Regular, FolderOpen24Regular, Form24Regular, Dismiss24Regular } from '@fluentui/react-icons';
+import { api, getCurrentUser } from '../api';
+import type { Expediente, JerarquiaEmpresa, Formulario } from '../entities';
 
 const estadoColors: Record<Expediente['estado'], "neutral" | "warning" | "informative" | "success" | "danger"> = {
-  borrador: 'neutral', en_revision: 'warning', en_aprobacion: 'informative', cerrado: 'success', rechazado: 'danger'
+  PENDIENTE: 'warning', APROBADO: 'success', RECHAZADO: 'danger'
 };
-const estadoText: Record<Expediente['estado'], string> = {
-  borrador: 'Borrador', en_revision: 'En Revisión', en_aprobacion: 'En Aprobación', cerrado: 'Cerrado', rechazado: 'Rechazado'
+
+const estadoLabel: Record<string, string> = {
+  PENDIENTE: 'Pendiente', APROBADO: 'Aprobado', RECHAZADO: 'Rechazado'
 };
 
 export default function Expedientes() {
+  const navigate = useNavigate();
+  const user = getCurrentUser();
   const [expedientes, setExpedientes] = useState<Expediente[]>([]);
-  const [areas, setAreas] = useState<Area[]>([]);
-  const [contratistas, setContratistas] = useState<Contratista[]>([]);
+  const [jerarquia, setJerarquia] = useState<JerarquiaEmpresa[]>([]);
+  const [todosFormularios, setTodosFormularios] = useState<Formulario[]>([]);
   const [search, setSearch] = useState('');
+
+  // Drawer state
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [form, setForm] = useState({ titulo: '', descripcion: '', area_id: 0, contratista_id: 0 });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Form state
+  const [titulo, setTitulo] = useState('');
+  const [selEmpresa, setSelEmpresa] = useState(0);
+  const [selArea, setSelArea] = useState(0);
+  const [selProyecto, setSelProyecto] = useState(0);
+  const [selDisciplina, setSelDisciplina] = useState(0);
+  const [archivo, setArchivo] = useState<File | null>(null);
+
+  // Dynamic form
+  const [formulario, setFormulario] = useState<Formulario | null>(null);
+  const [respuestas, setRespuestas] = useState<Record<number, string>>({});
+  const [loadingForm, setLoadingForm] = useState(false);
+  const [formularioBuscado, setFormularioBuscado] = useState(false);
+  const [mostrarSelectorForm, setMostrarSelectorForm] = useState(false);
+  const [selFormManual, setSelFormManual] = useState(0);
+
+  useEffect(() => { loadData(); }, []);
+
+  const loadData = async () => {
+    try {
+      const [exp, jer, forms] = await Promise.all([
+        api.getExpedientes(),
+        api.getJerarquia(),
+        api.getFormularios()
+      ]);
+      setExpedientes(exp);
+      setJerarquia(jer);
+      setTodosFormularios(forms);
+
+      if (user?.id_area) {
+        for (const emp of jer) {
+          const area = emp.areas.find(a => a.id === user.id_area);
+          if (area) { setSelEmpresa(emp.id); setSelArea(area.id); break; }
+        }
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  // Auto-detectar formulario por proyecto+disciplina
   useEffect(() => {
-    api.getExpedientes().then(setExpedientes).catch(console.error);
-    api.getAreas().then(setAreas).catch(console.error);
-    api.getContratistas().then(setContratistas).catch(console.error);
-  }, []);
+    if (selProyecto > 0 && selDisciplina > 0) {
+      setLoadingForm(true);
+      setFormularioBuscado(false);
+      setFormulario(null);
+      setMostrarSelectorForm(false);
+      setSelFormManual(0);
+      api.buscarFormulario(selProyecto, selDisciplina)
+        .then(f => { setFormulario(f); setRespuestas({}); })
+        .catch(() => setFormulario(null))
+        .finally(() => { setLoadingForm(false); setFormularioBuscado(true); });
+    } else {
+      setFormulario(null);
+      setFormularioBuscado(false);
+    }
+  }, [selProyecto, selDisciplina]);
 
-  const filtered = expedientes.filter(e => 
-    e.titulo.toLowerCase().includes(search.toLowerCase()) || 
-    e.descripcion.toLowerCase().includes(search.toLowerCase())
+  // Cargar formulario seleccionado manualmente
+  const aplicarFormularioManual = async (id: number) => {
+    if (!id) { setFormulario(null); setRespuestas({}); return; }
+    try {
+      const f = await api.getFormulario(id);
+      setFormulario(f);
+      setRespuestas({});
+    } catch (e) { console.error(e); }
+  };
+
+  const filtered = expedientes.filter(e =>
+    e.titulo.toLowerCase().includes(search.toLowerCase()) ||
+    e.nombre_archivo.toLowerCase().includes(search.toLowerCase())
   );
 
   const handleCreate = async () => {
-    if (!form.titulo || !form.contratista_id || !form.area_id) {
-      alert('Completar todos los campos');
+    if (!titulo || !selProyecto || !selDisciplina || !archivo) {
+      alert('Completar todos los campos obligatorios y adjuntar archivo');
       return;
     }
+    if (formulario) {
+      for (const campo of formulario.campos) {
+        if (campo.requerido && !respuestas[campo.id]) {
+          alert(`El campo "${campo.etiqueta}" es obligatorio`);
+          return;
+        }
+      }
+    }
+    setIsSubmitting(true);
     try {
-      const nuevo = await api.createExpediente({ ...form, estado: 'borrador' as const });
+      const formData = new FormData();
+      formData.append('titulo', titulo);
+      formData.append('id_proyecto', selProyecto.toString());
+      formData.append('id_disciplina', selDisciplina.toString());
+      formData.append('archivo', archivo);
+      if (formulario) {
+        const respArray = Object.keys(respuestas).map(k => ({ id_campo: Number(k), valor: respuestas[Number(k)] }));
+        formData.append('respuestas_formulario', JSON.stringify(respArray));
+      }
+      const nuevo = await api.createExpediente(formData);
       setExpedientes([...expedientes, nuevo]);
       setIsDrawerOpen(false);
-      setForm({ titulo: '', descripcion: '', area_id: 0, contratista_id: 0 });
-    } catch (e) {
-      console.error('Error al crear:', e);
-      alert('Error al crear expediente');
-    }
+      resetForm();
+    } catch (e: any) {
+      alert(`Error al crear expediente: ${e.message}`);
+    } finally { setIsSubmitting(false); }
   };
 
+  const resetForm = () => {
+    setTitulo(''); setSelProyecto(0); setSelDisciplina(0);
+    setArchivo(null); setRespuestas({}); setFormulario(null);
+    setFormularioBuscado(false); setMostrarSelectorForm(false); setSelFormManual(0);
+  };
+
+  const currentEmpresa = jerarquia.find(e => e.id === selEmpresa);
+  const currentArea = currentEmpresa?.areas.find(a => a.id === selArea);
+  const currentProyecto = currentArea?.proyectos.find(p => p.id === selProyecto);
+
   const cardStyle: React.CSSProperties = {
-    padding: 16,
-    backgroundColor: 'white',
-    borderRadius: 8,
-    boxShadow: '0 1px 4px rgba(0,0,0,0.1)'
+    padding: 16, backgroundColor: 'white', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.1)'
   };
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
         <Text weight="semibold" size={800}>Expedientes</Text>
-        <Button appearance="primary" icon={<Add24Regular />} onClick={() => setIsDrawerOpen(true)}>
-          Nuevo Expediente
-        </Button>
+        {user?.rol !== 'lector' && user?.rol !== 'revisor' && (
+          <Button appearance="primary" icon={<Add24Regular />} onClick={() => setIsDrawerOpen(true)}>
+            Subir Expediente
+          </Button>
+        )}
       </div>
 
       <div style={cardStyle}>
         <div style={{ marginBottom: 16 }}>
-          <Input contentBefore={<Search24Regular />} placeholder="Buscar..." value={search} onChange={(e, d) => setSearch(d.value)} style={{ width: 300 }} />
+          <Input contentBefore={<Search24Regular />} placeholder="Buscar..." value={search} onChange={(_, d) => setSearch(d.value)} style={{ width: 300 }} />
         </div>
-
         {filtered.length === 0 ? (
           <Text>No hay expedientes</Text>
         ) : (
           filtered.map(exp => (
-            <div key={exp.id} style={{ padding: '12px 16px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between' }}>
+            <div key={exp.id} style={{ padding: '12px 16px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <Text weight="semibold">{exp.titulo}</Text>
-                <Text block style={{ color: 'gray', fontSize: 12 }}>{exp.descripcion}</Text>
+                <Text block style={{ color: 'gray', fontSize: 12 }}>Versión {exp.version} • {exp.nombre_archivo}</Text>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 <Text style={{ fontSize: 12 }}>{new Date(exp.created_at).toLocaleDateString()}</Text>
-                <Badge appearance="filled" color={estadoColors[exp.estado]}>{estadoText[exp.estado]}</Badge>
+                <Badge appearance="filled" color={estadoColors[exp.estado]}>{estadoLabel[exp.estado] || exp.estado}</Badge>
+                <Button icon={<FolderOpen24Regular />} appearance="subtle" onClick={() => navigate(`/expedientes/${exp.id}`)}>
+                  Abrir
+                </Button>
               </div>
             </div>
           ))
         )}
       </div>
 
-      <Drawer open={isDrawerOpen} onOpenChange={(_, o) => setIsDrawerOpen(o.open)}>
+      {/* ── DRAWER SUBIR ─────────────────────────────────── */}
+      <Drawer open={isDrawerOpen} onOpenChange={(_, o) => { if (!o.open) { setIsDrawerOpen(false); resetForm(); } }} position="end" size="medium">
         <DrawerHeader>
-          <Text weight="semibold" size={500}>Nuevo Expediente</Text>
+          <Text weight="semibold" size={500}>Subir Nuevo Expediente</Text>
         </DrawerHeader>
         <DrawerBody>
-          <Field label="Título">
-            <Input value={form.titulo} onChange={(e, d) => setForm({ ...form, titulo: d.value })} />
-          </Field>
-          <Field label="Descripción" style={{ marginTop: 16 }}>
-            <Input value={form.descripcion} onChange={(e, d) => setForm({ ...form, descripcion: d.value })} />
-          </Field>
-          <Field label="Contratista" style={{ marginTop: 16 }}>
-            <select style={{ width: '100%', padding: '8px', borderRadius: 4, border: '1px solid #ccc' }} value={form.contratista_id} onChange={e => setForm({ ...form, contratista_id: Number(e.target.value) })}>
-              <option value={0}>Seleccionar...</option>
-              {contratistas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-            </select>
-          </Field>
-          <Field label="Área" style={{ marginTop: 16 }}>
-            <select style={{ width: '100%', padding: '8px', borderRadius: 4, border: '1px solid #ccc' }} value={form.area_id} onChange={e => setForm({ ...form, area_id: Number(e.target.value) })}>
-              <option value={0}>Seleccionar...</option>
-              {areas.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
-            </select>
-          </Field>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+            {/* Título */}
+            <Field label="Título del Documento" required>
+              <Input value={titulo} onChange={(_, d) => setTitulo(d.value)} placeholder="Ej: Plano Estructural PE-001" />
+            </Field>
+
+            {/* Jerarquía */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="Empresa" required>
+                <select style={selectStyle} value={selEmpresa} onChange={e => { setSelEmpresa(Number(e.target.value)); setSelArea(0); setSelProyecto(0); setSelDisciplina(0); }}>
+                  <option value={0}>Seleccionar...</option>
+                  {jerarquia.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+                </select>
+              </Field>
+              <Field label="Área" required>
+                <select style={selectStyle} value={selArea} onChange={e => { setSelArea(Number(e.target.value)); setSelProyecto(0); setSelDisciplina(0); }}>
+                  <option value={0}>Seleccionar...</option>
+                  {currentEmpresa?.areas.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="Proyecto" required>
+                <select style={selectStyle} value={selProyecto} onChange={e => { setSelProyecto(Number(e.target.value)); setSelDisciplina(0); }}>
+                  <option value={0}>Seleccionar...</option>
+                  {currentArea?.proyectos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                </select>
+              </Field>
+              <Field label="Disciplina" required>
+                <select style={selectStyle} value={selDisciplina} onChange={e => setSelDisciplina(Number(e.target.value))}>
+                  <option value={0}>Seleccionar...</option>
+                  {currentProyecto?.disciplinas.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+                </select>
+              </Field>
+            </div>
+
+            <Divider />
+
+            {/* ── SECCIÓN FORMULARIO DINÁMICO ─────────────────── */}
+            {selProyecto > 0 && selDisciplina > 0 && (
+              <div>
+                {loadingForm ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Spinner size="tiny" />
+                    <Text size={200} style={{ color: 'gray' }}>Buscando formulario de metadatos...</Text>
+                  </div>
+                ) : formulario ? (
+                  // ✅ Formulario auto-detectado o elegido manualmente
+                  <div style={{ borderRadius: 8, border: '1px solid #c5d0f0', overflow: 'hidden' }}>
+                    <div style={{ padding: '10px 14px', backgroundColor: '#e8f0fe', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Form24Regular style={{ color: '#0078d4' }} />
+                        <div>
+                          <Text weight="semibold" size={300}>{formulario.nombre}</Text>
+                          <Text size={100} block style={{ color: '#555' }}>{formulario.campos.length} campo(s) — Complete los metadatos del documento</Text>
+                        </div>
+                      </div>
+                      <Button
+                        size="small"
+                        appearance="subtle"
+                        icon={<Dismiss24Regular />}
+                        title="Quitar formulario"
+                        onClick={() => { setFormulario(null); setRespuestas({}); setSelFormManual(0); setMostrarSelectorForm(false); }}
+                      />
+                    </div>
+                    <div style={{ padding: 14, backgroundColor: 'white', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {formulario.campos.map(c => (
+                        <Field key={c.id} label={c.etiqueta} required={c.requerido} hint={!c.requerido ? 'Opcional' : undefined}>
+                          {c.tipo === 'lista' ? (
+                            <select style={selectStyle} value={respuestas[c.id] || ''} onChange={e => setRespuestas({ ...respuestas, [c.id]: e.target.value })}>
+                              <option value="">Seleccionar...</option>
+                              {c.opciones?.map(o => <option key={o} value={o}>{o}</option>)}
+                            </select>
+                          ) : c.tipo === 'fecha' ? (
+                            <input type="date" style={selectStyle} value={respuestas[c.id] || ''} onChange={e => setRespuestas({ ...respuestas, [c.id]: e.target.value })} />
+                          ) : (
+                            <Input value={respuestas[c.id] || ''} onChange={(_, d) => setRespuestas({ ...respuestas, [c.id]: d.value })} />
+                          )}
+                        </Field>
+                      ))}
+                    </div>
+                  </div>
+                ) : formularioBuscado && !mostrarSelectorForm ? (
+                  // ℹ️ Sin formulario auto-detectado → ofrecer agregar uno
+                  <div style={{ padding: 14, backgroundColor: '#fafafa', borderRadius: 8, border: '1px dashed #ccc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <Text weight="semibold" size={300} block>Sin formulario de metadatos configurado</Text>
+                      <Text size={200} style={{ color: 'gray' }}>El documento se subirá sin campos adicionales.</Text>
+                    </div>
+                    {todosFormularios.length > 0 && (
+                      <Button size="small" appearance="outline" icon={<Form24Regular />} onClick={() => setMostrarSelectorForm(true)}>
+                        Agregar formulario
+                      </Button>
+                    )}
+                  </div>
+                ) : mostrarSelectorForm ? (
+                  // 🗂️ Selector manual de formulario
+                  <div style={{ padding: 14, backgroundColor: '#fff4ce', borderRadius: 8, border: '1px solid #fbdc81' }}>
+                    <Text weight="semibold" size={300} block style={{ marginBottom: 10 }}>Seleccionar formulario de metadatos</Text>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <select
+                        style={{ ...selectStyle, flex: 1 }}
+                        value={selFormManual}
+                        onChange={e => setSelFormManual(Number(e.target.value))}
+                      >
+                        <option value={0}>— Elegir formulario —</option>
+                        {todosFormularios.map(f => (
+                          <option key={f.id} value={f.id}>{f.nombre} ({f.campos?.length ?? 0} campos)</option>
+                        ))}
+                      </select>
+                      <Button size="small" appearance="primary" disabled={!selFormManual} onClick={() => aplicarFormularioManual(selFormManual)}>
+                        Aplicar
+                      </Button>
+                      <Button size="small" appearance="subtle" onClick={() => setMostrarSelectorForm(false)}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {/* Archivo */}
+            <Field label="Archivo" required>
+              <input type="file" onChange={e => setArchivo(e.target.files?.[0] || null)} style={{ padding: '8px 0' }} />
+              {archivo && <Text size={200} style={{ color: 'gray' }}>✓ {archivo.name}</Text>}
+            </Field>
+          </div>
         </DrawerBody>
         <DrawerFooter>
-          <Button appearance="secondary" onClick={() => setIsDrawerOpen(false)}>Cancelar</Button>
-          <Button appearance="primary" onClick={handleCreate}>Crear</Button>
+          <Button appearance="secondary" onClick={() => { setIsDrawerOpen(false); resetForm(); }} disabled={isSubmitting}>Cancelar</Button>
+          <Button appearance="primary" onClick={handleCreate} disabled={isSubmitting}>
+            {isSubmitting ? <Spinner size="extra-tiny" /> : 'Subir Expediente'}
+          </Button>
         </DrawerFooter>
       </Drawer>
     </div>
   );
 }
+
+const selectStyle: React.CSSProperties = {
+  width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #d1d1d1', fontFamily: 'inherit', fontSize: 14
+};

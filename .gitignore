@@ -1,15 +1,44 @@
+# Archivos de node
 node_modules
 dist
 *.log
+
+# Variables de entorno
 .env
 .env.local
 .env.*
 !.env.example
+
+# Sistema operativo
 .DS_Store
 *.tgz
-coverage
+
+# IDEs
 .vscode
 .idea
+
+# Archivos de desarrollo local
+docker-compose.override.yml
+INSTRUCTIVO_DESPLIEGUE.md
+
+# Archivos temporales de prueba y scripts de desarrollo
+test_e2e.ps1
+test_download.js
+test_exp.js
+test_form.js
+test_list.js
+test_login_admin.json
+test_login_bad.json
+test_minio.js
+test_upload.js
+fix_admin.js
+reset_passwords.js
+seed_completo.sql
+seed_campos.sql
+dummy.txt
+doc_prueba.txt
+doc_prueba2.txt
+doc_corregido.txt
 AGENTS.md
 CONTEXT.md
-test-login.json
+coverage
