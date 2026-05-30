@@ -65,13 +65,13 @@ const initDb = async () => {
 
   // Usuarios de testing a mantener en el sistema
   const TEST_USERS = [
-    { username: 'admin',         password: 'admin123',    nombre: 'Administrador',  email: 'admin@gps.cl',          rol: 'administrador' },
-    { username: 'juan_revisor',  password: 'password123', nombre: 'Juan Revisor',   email: 'juan@gps.cl',           rol: 'revisor' },
-    { username: 'test_revisor_2',password: 'password123', nombre: 'Test Revisor 2', email: 'test_revisor2@gps.cl',  rol: 'revisor' },
-    { username: 'pedro_terreno', password: 'password123', nombre: 'Pedro Terreno',  email: 'pedro@gps.cl',          rol: 'usuario_terreno' },
-    { username: 'revisor_test',  password: 'password123', nombre: 'Test Revisor',   email: 'revisor_test@gps.cl',   rol: 'usuario_terreno' },
-    { username: 'maria_lectora', password: 'password123', nombre: 'Maria Lectora',  email: 'maria@gps.cl',          rol: 'lector' },
-    { username: 'test_lector_2', password: 'password123', nombre: 'Test Lector 2',  email: 'test_lector2@gps.cl',   rol: 'lector' },
+    { username: 'admin', password: 'admin123', nombre: 'Administrador', email: 'admin@gps.cl', rol: 'administrador' },
+    { username: 'juan_revisor', password: 'password123', nombre: 'Juan Revisor', email: 'juan@gps.cl', rol: 'revisor' },
+    { username: 'test_revisor_2', password: 'password123', nombre: 'Test Revisor 2', email: 'test_revisor2@gps.cl', rol: 'revisor' },
+    { username: 'pedro_terreno', password: 'password123', nombre: 'Pedro Terreno', email: 'pedro@gps.cl', rol: 'usuario_terreno' },
+    { username: 'revisor_test', password: 'password123', nombre: 'Test Revisor', email: 'revisor_test@gps.cl', rol: 'usuario_terreno' },
+    { username: 'maria_lectora', password: 'password123', nombre: 'Maria Lectora', email: 'maria@gps.cl', rol: 'lector' },
+    { username: 'test_lector_2', password: 'password123', nombre: 'Test Lector 2', email: 'test_lector2@gps.cl', rol: 'lector' },
   ];
 
   for (const u of TEST_USERS) {
@@ -244,8 +244,10 @@ app.post('/forgot-password', async (req: Request, res: Response): Promise<void> 
       [token, expires, user.id]
     );
 
-    // Enviar correo real si está configurado el SMTP
-    const resetUrl = `http://localhost:5173/reset-password?token=${token}`;
+    // Configuración de la URL dinámica
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
+
     if (process.env.SMTP_USER && process.env.SMTP_PASS) {
       try {
         await transporter.sendMail({
