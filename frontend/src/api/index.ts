@@ -46,18 +46,26 @@ export const api = {
   // Usuarios
   login: (username: string, password: string): Promise<LoginResponse> =>
     request(`${API_USUARIOS}/login`, { method: 'POST', body: JSON.stringify({ username, password }) }),
+  register: (data: { username: string; password: string; nombre: string; email: string }): Promise<Usuario> =>
+    request(`${API_USUARIOS}/register`, { method: 'POST', body: JSON.stringify(data) }),
   getUsuarios: (): Promise<Usuario[]> => request(`${API_USUARIOS}/usuarios`),
   createUsuario: (data: Partial<Usuario>): Promise<Usuario> =>
     request(`${API_USUARIOS}/usuarios`, { method: 'POST', body: JSON.stringify(data) }),
+  updateUsuario: (id: number, data: Partial<Usuario>): Promise<Usuario> =>
+    request(`${API_USUARIOS}/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   updateUsuarioEstado: (id: number, estado: string): Promise<Usuario> =>
     request(`${API_USUARIOS}/usuarios/${id}/estado`, { method: 'PUT', body: JSON.stringify({ estado }) }),
+  forgotPassword: (email: string): Promise<{ message: string; token?: string }> =>
+    request(`${API_USUARIOS}/forgot-password`, { method: 'POST', body: JSON.stringify({ email }) }),
+  resetPassword: (token: string, password: string): Promise<{ message: string }> =>
+    request(`${API_USUARIOS}/reset-password`, { method: 'POST', body: JSON.stringify({ token, password }) }),
 
   // Expedientes
   getExpedientes: (): Promise<Expediente[]> => request(`${API_EXPEDIENTES}/expedientes`),
   getExpediente: (id: number): Promise<Expediente> => request(`${API_EXPEDIENTES}/expedientes/${id}`),
   getExpedienteVersiones: (id: number): Promise<ExpedienteVersion[]> => request(`${API_EXPEDIENTES}/expedientes/${id}/versiones`),
   getExpedienteUrl: (id: number): Promise<{url: string, nombre_archivo: string}> => request(`${API_EXPEDIENTES}/expedientes/${id}/url`),
-  createExpediente: (formData: FormData): Promise<Expediente> =>
+  createExpediente: (formData: FormData): Promise<Expediente | Expediente[]> =>
     request(`${API_EXPEDIENTES}/expedientes`, { method: 'POST', body: formData }),
   createNuevaVersion: (idPadre: number, formData: FormData): Promise<Expediente> =>
     request(`${API_EXPEDIENTES}/expedientes/${idPadre}/nueva-version`, { method: 'POST', body: formData }),

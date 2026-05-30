@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { Button, Input, Field, Text } from '@fluentui/react-components';
 import { api } from '../api';
 
@@ -9,6 +9,8 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const justRegistered = (location.state as { registered?: boolean } | null)?.registered === true;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,31 +44,61 @@ export default function Login() {
         width: 400
       }}>
         <Text weight="semibold" size={600} block style={{ marginBottom: 24, textAlign: 'center' }}>
-          Sistema de Gestión Documental - Iniciar Sesión
+          Sistema de Gestión Documental
         </Text>
-        {error && (
-          <Text block style={{ color: '#d13438', marginBottom: 16 }}>
-            {error}
-          </Text>
+
+        {justRegistered && (
+          <div style={{
+            backgroundColor: '#dff6dd',
+            border: '1px solid #107c10',
+            borderRadius: 4,
+            padding: '10px 14px',
+            marginBottom: 16,
+          }}>
+            <Text style={{ color: '#107c10', fontSize: 13 }}>
+              ✅ Cuenta creada exitosamente. Inicia sesión con tus credenciales.
+            </Text>
+          </div>
         )}
+
+        {error && (
+          <div style={{
+            backgroundColor: '#fde7e9',
+            border: '1px solid #f1707a',
+            borderRadius: 4,
+            padding: '10px 14px',
+            marginBottom: 16,
+          }}>
+            <Text style={{ color: '#d13438', fontSize: 13 }}>{error}</Text>
+          </div>
+        )}
+
         <Field label="Usuario">
           <Input
+            id="login-username"
             value={username}
-            onChange={(e, data) => setUsername(data.value)}
-            placeholder="admin"
+            onChange={(_e, data) => setUsername(data.value)}
+            placeholder="Ej: admin"
             required
           />
         </Field>
         <Field label="Contraseña" style={{ marginTop: 16 }}>
           <Input
+            id="login-password"
             type="password"
             value={password}
-            onChange={(e, data) => setPassword(data.value)}
-            placeholder="********"
+            onChange={(_e, data) => setPassword(data.value)}
+            placeholder="••••••••"
             required
           />
+          <div style={{ textAlign: 'right', marginTop: 4 }}>
+            <Link to="/forgot-password" style={{ color: '#0078d4', textDecoration: 'none', fontSize: '12px' }}>
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </div>
         </Field>
         <Button
+          id="login-submit"
           type="submit"
           appearance="primary"
           disabled={loading}
@@ -74,10 +106,14 @@ export default function Login() {
         >
           {loading ? 'Iniciando...' : 'Iniciar Sesión'}
         </Button>
-        <Text block style={{ marginTop: 16, textAlign: 'center', fontSize: 12, color: 'gray' }}>
-          Credenciales:
+
+        <Text block style={{ marginTop: 16, textAlign: 'center', fontSize: 13, color: '#666' }}>
+          ¿No tienes cuenta?{' '}
+          <Link to="/register" style={{ color: '#0078d4', textDecoration: 'none', fontWeight: 600 }}>
+            Regístrate aquí
+          </Link>
         </Text>
       </form>
     </div>
   );
-}
+}

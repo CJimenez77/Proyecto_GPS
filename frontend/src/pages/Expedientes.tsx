@@ -13,6 +13,16 @@ const estadoLabel: Record<string, string> = {
   PENDIENTE: 'Pendiente', APROBADO: 'Aprobado', RECHAZADO: 'Rechazado'
 };
 
+const getNombreArchivoDisplay = (nombre: string) => {
+  try {
+    if (nombre.startsWith('[')) {
+      const arr = JSON.parse(nombre) as string[];
+      return `${arr.length} archivos: ${arr.join(', ')}`;
+    }
+  } catch {}
+  return nombre;
+};
+
 export default function Expedientes() {
   const navigate = useNavigate();
   const user = getCurrentUser();
@@ -31,7 +41,7 @@ export default function Expedientes() {
   const [selArea, setSelArea] = useState(0);
   const [selProyecto, setSelProyecto] = useState(0);
   const [selDisciplina, setSelDisciplina] = useState(0);
-  const [archivo, setArchivo] = useState<File | null>(null);
+  const [archivos, setArchivos] = useState<File[]>([]);
 
   // Dynamic form
   const [formulario, setFormulario] = useState<Formulario | null>(null);
@@ -96,9 +106,36 @@ export default function Expedientes() {
     e.nombre_archivo.toLowerCase().includes(search.toLowerCase())
   );
 
+  const handleArchivoChange = (filesList: FileList | null) => {
+    if (!filesList) {
+      setArchivos([]);
+      return;
+    }
+    const selectedFiles = Array.from(filesList);
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+    const oversizedFiles = selectedFiles.filter(f => f.size > MAX_FILE_SIZE);
+    
+    if (oversizedFiles.length > 0) {
+      alert(`Los siguientes archivos superan el límite de 50MB y no se agregarán:\n${oversizedFiles.map(f => `- ${f.name} (${(f.size / (1024 * 1024)).toFixed(2)} MB)`).join('\n')}`);
+      const validFiles = selectedFiles.filter(f => f.size <= MAX_FILE_SIZE);
+      setArchivos(prev => {
+        // Combinar archivos evitando duplicados por nombre
+        const existingNames = new Set(prev.map(f => f.name));
+        const filteredNew = validFiles.filter(f => !existingNames.has(f.name));
+        return [...prev, ...filteredNew];
+      });
+    } else {
+      setArchivos(prev => {
+        const existingNames = new Set(prev.map(f => f.name));
+        const filteredNew = selectedFiles.filter(f => !existingNames.has(f.name));
+        return [...prev, ...filteredNew];
+      });
+    }
+  };
+
   const handleCreate = async () => {
-    if (!titulo || !selProyecto || !selDisciplina || !archivo) {
-      alert('Completar todos los campos obligatorios y adjuntar archivo');
+    if (!titulo || !selProyecto || !selDisciplina || archivos.length === 0) {
+      alert('Completar todos los campos obligatorios y adjuntar al menos un archivo');
       return;
     }
     if (formulario) {
@@ -115,13 +152,21 @@ export default function Expedientes() {
       formData.append('titulo', titulo);
       formData.append('id_proyecto', selProyecto.toString());
       formData.append('id_disciplina', selDisciplina.toString());
-      formData.append('archivo', archivo);
+      
+      archivos.forEach(file => {
+        formData.append('archivo', file);
+      });
+
       if (formulario) {
         const respArray = Object.keys(respuestas).map(k => ({ id_campo: Number(k), valor: respuestas[Number(k)] }));
         formData.append('respuestas_formulario', JSON.stringify(respArray));
       }
       const nuevo = await api.createExpediente(formData);
-      setExpedientes([...expedientes, nuevo]);
+      if (Array.isArray(nuevo)) {
+        setExpedientes([...expedientes, ...nuevo]);
+      } else {
+        setExpedientes([...expedientes, nuevo]);
+      }
       setIsDrawerOpen(false);
       resetForm();
     } catch (e: any) {
@@ -131,7 +176,7 @@ export default function Expedientes() {
 
   const resetForm = () => {
     setTitulo(''); setSelProyecto(0); setSelDisciplina(0);
-    setArchivo(null); setRespuestas({}); setFormulario(null);
+    setArchivos([]); setRespuestas({}); setFormulario(null);
     setFormularioBuscado(false); setMostrarSelectorForm(false); setSelFormManual(0);
   };
 
@@ -165,7 +210,7 @@ export default function Expedientes() {
             <div key={exp.id} style={{ padding: '12px 16px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <Text weight="semibold">{exp.titulo}</Text>
-                <Text block style={{ color: 'gray', fontSize: 12 }}>Versión {exp.version} • {exp.nombre_archivo}</Text>
+                <Text block style={{ color: 'gray', fontSize: 12 }}>Versión {exp.version} • {getNombreArchivoDisplay(exp.nombre_archivo)}</Text>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 <Text style={{ fontSize: 12 }}>{new Date(exp.created_at).toLocaleDateString()}</Text>
@@ -308,10 +353,43 @@ export default function Expedientes() {
               </div>
             )}
 
-            {/* Archivo */}
-            <Field label="Archivo" required>
-              <input type="file" onChange={e => setArchivo(e.target.files?.[0] || null)} style={{ padding: '8px 0' }} />
-              {archivo && <Text size={200} style={{ color: 'gray' }}>✓ {archivo.name}</Text>}
+            {/* Archivos */}
+            <Field label="Archivos" required hint="Puede seleccionar más de un archivo. Máximo 50MB por archivo.">
+              <input
+                type="file"
+                multiple
+                onChange={e => handleArchivoChange(e.target.files)}
+                style={{ padding: '8px 0' }}
+              />
+              {archivos.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                  {archivos.map((file, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '6px 10px',
+                        backgroundColor: '#f3f2f1',
+                        borderRadius: 4,
+                        borderLeft: '3px solid #0078d4',
+                      }}
+                    >
+                      <Text size={200} style={{ color: '#323130', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '85%' }}>
+                        📄 {file.name} <span style={{ color: '#605e5c', marginLeft: 6 }}>({(file.size / (1024 * 1024)).toFixed(2)} MB)</span>
+                      </Text>
+                      <Button
+                        size="small"
+                        appearance="subtle"
+                        icon={<Dismiss24Regular style={{ fontSize: 14 }} />}
+                        title="Quitar archivo"
+                        onClick={() => setArchivos(archivos.filter((_, i) => i !== idx))}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </Field>
           </div>
         </DrawerBody>

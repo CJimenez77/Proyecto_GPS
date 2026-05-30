@@ -2,11 +2,24 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import bcrypt from 'bcrypt';
+import nodemailer from 'nodemailer';
 import pkg from 'pg';
 const { Pool } = pkg;
 
 dotenv.config();
+
+// Configuración del transportador SMTP para correos reales
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: process.env.SMTP_SECURE === 'true', // true para puerto 465, false para 587
+  auth: {
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+  },
+});
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -42,23 +55,43 @@ const initDb = async () => {
     }
   }
 
+  // Asegurar que existan las columnas de restablecimiento de contraseña
   try {
-    // El admin debería existir ya por init.sql, pero lo creamos como respaldo
-    const adminCheck = await pool.query("SELECT id FROM usuarios WHERE username = 'admin'");
-    if (adminCheck.rows.length === 0) {
-      const hashedPassword = await bcrypt.hash('admin123', 10);
-      await pool.query(
-        `INSERT INTO usuarios (username, password, nombre, email, rol, id_area, estado)
-         VALUES ('admin', $1, 'Administrador', 'admin@gps.cl', 'administrador', NULL, 'activo')`,
-        [hashedPassword]
-      );
-      console.log('Usuario admin creado (admin/admin123)');
-    } else {
-      console.log('Usuario admin encontrado, sistema listo.');
-    }
+    await pool.query('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255)');
+    await pool.query('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP');
   } catch (err) {
-    console.warn('ADVERTENCIA: No se pudo verificar usuario admin:', err);
+    console.error('Error al agregar columnas de reset de contraseña:', err);
   }
+
+  // Usuarios de testing a mantener en el sistema
+  const TEST_USERS = [
+    { username: 'admin',         password: 'admin123',    nombre: 'Administrador',  email: 'admin@gps.cl',          rol: 'administrador' },
+    { username: 'juan_revisor',  password: 'password123', nombre: 'Juan Revisor',   email: 'juan@gps.cl',           rol: 'revisor' },
+    { username: 'test_revisor_2',password: 'password123', nombre: 'Test Revisor 2', email: 'test_revisor2@gps.cl',  rol: 'revisor' },
+    { username: 'pedro_terreno', password: 'password123', nombre: 'Pedro Terreno',  email: 'pedro@gps.cl',          rol: 'usuario_terreno' },
+    { username: 'revisor_test',  password: 'password123', nombre: 'Test Revisor',   email: 'revisor_test@gps.cl',   rol: 'usuario_terreno' },
+    { username: 'maria_lectora', password: 'password123', nombre: 'Maria Lectora',  email: 'maria@gps.cl',          rol: 'lector' },
+    { username: 'test_lector_2', password: 'password123', nombre: 'Test Lector 2',  email: 'test_lector2@gps.cl',   rol: 'lector' },
+  ];
+
+  for (const u of TEST_USERS) {
+    try {
+      const check = await pool.query('SELECT id FROM usuarios WHERE username = $1', [u.username]);
+      if (check.rows.length === 0) {
+        const hashed = await bcrypt.hash(u.password, 10);
+        await pool.query(
+          `INSERT INTO usuarios (username, password, nombre, email, rol, id_area, estado)
+           VALUES ($1, $2, $3, $4, $5, NULL, 'activo')`,
+          [u.username, hashed, u.nombre, u.email, u.rol]
+        );
+        console.log(`Usuario de testing creado: ${u.username} (${u.rol})`);
+      }
+    } catch (err) {
+      console.warn(`ADVERTENCIA: No se pudo verificar usuario ${u.username}:`, err);
+    }
+  }
+
+  console.log('Sistema listo.');
 };
 
 interface User {
@@ -104,6 +137,40 @@ app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', service: 'service-usuarios' });
 });
 
+// POST /register (público — crea cuenta con rol mínimo 'lector')
+app.post('/register', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { username, password, nombre, email } = req.body;
+
+    if (!username || !password || !nombre || !email) {
+      res.status(400).json({ error: 'username, password, nombre y email son requeridos' });
+      return;
+    }
+
+    if (password.length < 6) {
+      res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+      return;
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      `INSERT INTO usuarios (username, password, nombre, email, rol, id_area, estado)
+       VALUES ($1, $2, $3, $4, 'lector', NULL, 'activo')
+       RETURNING id, username, nombre, email, rol, id_area, estado`,
+      [username.trim(), hashedPassword, nombre.trim(), email.trim().toLowerCase()]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (error: unknown) {
+    if (error instanceof Error && (error.message.includes('duplicate') || error.message.includes('unique'))) {
+      res.status(409).json({ error: 'El username o email ya está registrado' });
+      return;
+    }
+    console.error('Error en registro:', error);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
 // POST /login
 app.post('/login', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -147,6 +214,116 @@ app.post('/login', async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error) {
     console.error('Error en login:', error);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+// POST /forgot-password
+app.post('/forgot-password', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ error: 'El correo electrónico es requerido' });
+      return;
+    }
+
+    const result = await pool.query('SELECT * FROM usuarios WHERE email = $1 AND estado = \'activo\'', [email.trim().toLowerCase()]);
+    if (result.rows.length === 0) {
+      // Por seguridad, damos un mensaje genérico
+      res.json({ message: 'Si el correo está registrado, se enviarán las instrucciones para restablecer la contraseña.' });
+      return;
+    }
+
+    const user = result.rows[0];
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = new Date();
+    expires.setHours(expires.getHours() + 1); // 1 hora de validez
+
+    await pool.query(
+      'UPDATE usuarios SET reset_token = $1, reset_token_expires = $2 WHERE id = $3',
+      [token, expires, user.id]
+    );
+
+    // Enviar correo real si está configurado el SMTP
+    const resetUrl = `http://localhost:5173/reset-password?token=${token}`;
+    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+      try {
+        await transporter.sendMail({
+          from: process.env.SMTP_FROM || `"GPS Seguridad" <${process.env.SMTP_USER}>`,
+          to: user.email,
+          subject: '🔑 Restablecer contraseña - GPS',
+          html: `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e6ed; border-radius: 8px;">
+              <h2 style="color: #0078d4; text-align: center;">Restablecimiento de Contraseña</h2>
+              <p>Hola <strong>${user.nombre}</strong>,</p>
+              <p>Recibimos una solicitud para restablecer tu contraseña de acceso en el Sistema de Gestión Documental de GPS.</p>
+              <p>Para continuar y establecer una nueva contraseña, por favor haz clic en el botón de abajo:</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${resetUrl}" style="background-color: #0078d4; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Restablecer Contraseña</a>
+              </div>
+              <p style="color: #666; font-size: 12px; border-top: 1px solid #eff2f5; padding-top: 15px;">
+                Si no solicitaste este cambio, puedes ignorar este correo de forma segura. Tu contraseña actual seguirá funcionando.
+              </p>
+            </div>
+          `
+        });
+        console.log(`📧 Correo de restablecimiento enviado exitosamente a: ${user.email}`);
+      } catch (mailErr) {
+        console.error('Error al enviar correo electrónico real:', mailErr);
+        res.status(500).json({ error: 'No se pudo enviar el correo de recuperación. Verifique la configuración de SMTP.' });
+        return;
+      }
+    } else {
+      console.warn('ADVERTENCIA: SMTP no configurado en el archivo .env. El correo de restablecimiento no pudo ser enviado.');
+      res.status(500).json({ error: 'La funcionalidad de recuperación por correo real requiere configurar el servidor SMTP en el archivo .env.' });
+      return;
+    }
+
+    res.json({
+      message: 'Si el correo está registrado, se enviarán las instrucciones para restablecer la contraseña.',
+      token: token
+    });
+  } catch (error) {
+    console.error('Error en forgot-password:', error);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+// POST /reset-password
+app.post('/reset-password', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) {
+      res.status(400).json({ error: 'Token y nueva contraseña son requeridos' });
+      return;
+    }
+
+    if (password.length < 6) {
+      res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+      return;
+    }
+
+    const result = await pool.query(
+      'SELECT * FROM usuarios WHERE reset_token = $1 AND reset_token_expires > CURRENT_TIMESTAMP AND estado = \'activo\'',
+      [token]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(400).json({ error: 'El token de restablecimiento es inválido o ha expirado' });
+      return;
+    }
+
+    const user = result.rows[0];
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await pool.query(
+      'UPDATE usuarios SET password = $1, reset_token = NULL, reset_token_expires = NULL WHERE id = $2',
+      [hashedPassword, user.id]
+    );
+
+    res.json({ message: 'Contraseña restablecida con éxito.' });
+  } catch (error) {
+    console.error('Error en reset-password:', error);
     res.status(500).json({ error: 'Error interno' });
   }
 });

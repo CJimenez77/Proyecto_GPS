@@ -200,17 +200,44 @@ app.get('/expedientes/:id/url', authenticateToken, async (req: Request, res: Res
       forcePathStyle: true,
     });
 
-    // Incluir ContentType en la URL firmada para que el navegador sepa qué tipo de archivo es
-    const contentType = getMimeType(nombre_archivo);
-    const cmd = new GetObjectCommand({
-      Bucket: MINIO_BUCKET,
-      Key: archivo_key,
-      ResponseContentDisposition: `attachment; filename="${nombre_archivo}"`,
-      ResponseContentType: contentType,
+    let keys: string[] = [];
+    let names: string[] = [];
+
+    try {
+      if (nombre_archivo.startsWith('[')) {
+        names = JSON.parse(nombre_archivo);
+        keys = JSON.parse(archivo_key);
+      } else {
+        names = [nombre_archivo];
+        keys = [archivo_key];
+      }
+    } catch {
+      names = [nombre_archivo];
+      keys = [archivo_key];
+    }
+
+    const archivosResult = [];
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      const name = names[i];
+      const contentType = getMimeType(name);
+      const cmd = new GetObjectCommand({
+        Bucket: MINIO_BUCKET,
+        Key: key,
+        ResponseContentDisposition: `attachment; filename="${name}"`,
+        ResponseContentType: contentType,
+      });
+      const url = await getSignedUrl(publicS3, cmd, { expiresIn: 3600 });
+      archivosResult.push({ url, nombre_archivo: name, content_type: contentType });
+    }
+
+    res.json({
+      url: archivosResult[0].url,
+      nombre_archivo: archivosResult[0].nombre_archivo,
+      content_type: archivosResult[0].content_type,
+      expires_in: 3600,
+      archivos: archivosResult
     });
-    
-    const url = await getSignedUrl(publicS3, cmd, { expiresIn: 3600 });
-    res.json({ url, nombre_archivo, content_type: contentType, expires_in: 3600 });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Error interno' }); }
 });
 
@@ -241,16 +268,16 @@ app.get('/expedientes/:id/versiones', authenticateToken, async (req: Request, re
 app.post('/expedientes',
   authenticateToken,
   requireRoles('usuario_terreno', 'administrador'),
-  upload.single('archivo'),
+  upload.any(),
   async (req: Request, res: Response): Promise<void> => {
     const client = await pool.connect();
     try {
       const user: User = (req as any).user;
       const { titulo, id_proyecto, id_disciplina, respuestas_formulario } = req.body;
-      const file = (req as any).file;
+      const files = (req as any).files as Express.Multer.File[] | undefined;
 
-      if (!titulo || !id_proyecto || !id_disciplina || !file) {
-        res.status(400).json({ error: 'titulo, id_proyecto, id_disciplina y archivo son requeridos' }); return;
+      if (!titulo || !id_proyecto || !id_disciplina || !files || files.length === 0) {
+        res.status(400).json({ error: 'titulo, id_proyecto, id_disciplina y al menos un archivo son requeridos' }); return;
       }
 
       // Validar que el proyecto pertenece al área del usuario (si no es administrador)
@@ -265,22 +292,33 @@ app.post('/expedientes',
 
       await client.query('BEGIN');
 
-      // Subir a MinIO
-      const archivo_key = uuidv4();
-      const nombre_archivo = file.originalname;
-      await s3.send(new PutObjectCommand({
-        Bucket: MINIO_BUCKET,
-        Key: archivo_key,
-        Body: file.buffer,
-        ContentType: file.mimetype,
-      }));
+      const keys: string[] = [];
+      const names: string[] = [];
 
-      // Insertar expediente
+      for (const file of files) {
+        // Subir a MinIO
+        const archivo_key = uuidv4();
+        const nombre_archivo = file.originalname;
+        await s3.send(new PutObjectCommand({
+          Bucket: MINIO_BUCKET,
+          Key: archivo_key,
+          Body: file.buffer,
+          ContentType: file.mimetype,
+        }));
+        keys.push(archivo_key);
+        names.push(nombre_archivo);
+      }
+
+      // Serializar
+      const finalArchivoKey = keys.length === 1 ? keys[0] : JSON.stringify(keys);
+      const finalNombreArchivo = names.length === 1 ? names[0] : JSON.stringify(names);
+
+      // Insertar expediente único
       const expResult = await client.query(`
         INSERT INTO expedientes (titulo, id_proyecto, id_disciplina, subido_por, archivo_key, nombre_archivo, estado, version)
         VALUES ($1, $2, $3, $4, $5, $6, 'PENDIENTE', 1)
         RETURNING *
-      `, [titulo, id_proyecto, id_disciplina, user.id, archivo_key, nombre_archivo]);
+      `, [titulo, id_proyecto, id_disciplina, user.id, finalArchivoKey, finalNombreArchivo]);
       const expediente = expResult.rows[0];
 
       // Insertar respuestas de formulario si vienen
@@ -302,7 +340,7 @@ app.post('/expedientes',
         }
       }
 
-      // Asignación automática de tarea: usar el área del PROYECTO (no del usuario, ya que admin no tiene área)
+      // Asignación automática de tarea
       const id_area_proyecto = proyQ.rows[0].id_area;
       const procesoQ = await client.query(`
         SELECT pr.id, e.id AS etapa_id, e.id_revisor
@@ -312,14 +350,28 @@ app.post('/expedientes',
         ORDER BY pr.id DESC LIMIT 1
       `, [id_area_proyecto]);
 
-      if (procesoQ.rows.length && procesoQ.rows[0].id_revisor) {
-        const etapa = procesoQ.rows[0];
+      let etapa = procesoQ.rows.length ? procesoQ.rows[0] : null;
+
+      if (!etapa || !etapa.id_revisor) {
+        const fallbackQ = await client.query(`
+          SELECT pr.id, e.id AS etapa_id, e.id_revisor
+          FROM procesos pr
+          JOIN etapas e ON e.id_proceso = pr.id AND e.orden = 1 AND e.estado = 'activo'
+          WHERE pr.estado = 'activo'
+          ORDER BY pr.id DESC LIMIT 1
+        `);
+        if (fallbackQ.rows.length && fallbackQ.rows[0].id_revisor) {
+          etapa = fallbackQ.rows[0];
+        }
+      }
+
+      if (etapa && etapa.id_revisor) {
         await client.query(`
           INSERT INTO tareas (id_expediente, id_usuario_asignado, id_etapa, estado)
           VALUES ($1, $2, $3, 'ABIERTA')
         `, [expediente.id, etapa.id_revisor, etapa.etapa_id]);
       } else {
-        console.warn(`[ADVERTENCIA] No existe proceso/etapa configurada para área ${id_area_proyecto}. Expediente ${expediente.id} creado sin tarea.`);
+        console.warn(`[ADVERTENCIA] No existe proceso/etapa configurada (ni siquiera fallback) para área ${id_area_proyecto}. Expediente ${expediente.id} creado sin tarea.`);
       }
 
       await client.query('COMMIT');
@@ -335,13 +387,13 @@ app.post('/expedientes',
 app.post('/expedientes/:id/nueva-version',
   authenticateToken,
   requireRoles('usuario_terreno', 'administrador'),
-  upload.single('archivo'),
+  upload.any(),
   async (req: Request, res: Response): Promise<void> => {
     const client = await pool.connect();
     try {
       const user: User = (req as any).user;
       const { titulo } = req.body;
-      const file = (req as any).file;
+      const files = (req as any).files as Express.Multer.File[] | undefined;
 
       // Obtener expediente original
       const origQ = await pool.query('SELECT * FROM expedientes WHERE id = $1', [req.params.id]);
@@ -354,18 +406,28 @@ app.post('/expedientes/:id/nueva-version',
       if (user.rol !== 'administrador' && original.subido_por !== user.id) {
         res.status(403).json({ error: 'No autorizado' }); return;
       }
-      if (!file) { res.status(400).json({ error: 'archivo es requerido' }); return; }
+      if (!files || files.length === 0) { res.status(400).json({ error: 'archivo(s) requerido(s)' }); return; }
 
       await client.query('BEGIN');
 
-      const archivo_key = uuidv4();
-      const nombre_archivo = file.originalname;
-      await s3.send(new PutObjectCommand({
-        Bucket: MINIO_BUCKET,
-        Key: archivo_key,
-        Body: file.buffer,
-        ContentType: file.mimetype,
-      }));
+      const keys: string[] = [];
+      const names: string[] = [];
+
+      for (const file of files) {
+        const archivo_key = uuidv4();
+        const nombre_archivo = file.originalname;
+        await s3.send(new PutObjectCommand({
+          Bucket: MINIO_BUCKET,
+          Key: archivo_key,
+          Body: file.buffer,
+          ContentType: file.mimetype,
+        }));
+        keys.push(archivo_key);
+        names.push(nombre_archivo);
+      }
+
+      const finalArchivoKey = keys.length === 1 ? keys[0] : JSON.stringify(keys);
+      const finalNombreArchivo = names.length === 1 ? names[0] : JSON.stringify(names);
 
       // Determinar número de versión
       const raiz = original.id_expediente_padre || original.id;
@@ -382,7 +444,7 @@ app.post('/expedientes/:id/nueva-version',
       `, [
         titulo || original.titulo,
         original.id_proyecto, original.id_disciplina,
-        user.id, archivo_key, nombre_archivo,
+        user.id, finalArchivoKey, finalNombreArchivo,
         raiz, nuevaVersion
       ]);
       const expediente = newExp.rows[0];
@@ -399,8 +461,22 @@ app.post('/expedientes/:id/nueva-version',
         ORDER BY pr.id DESC LIMIT 1
       `, [id_area]);
 
-      if (procesoQ.rows.length && procesoQ.rows[0].id_revisor) {
-        const etapa = procesoQ.rows[0];
+      let etapa = procesoQ.rows.length ? procesoQ.rows[0] : null;
+
+      if (!etapa || !etapa.id_revisor) {
+        const fallbackQ = await client.query(`
+          SELECT pr.id, e.id AS etapa_id, e.id_revisor
+          FROM procesos pr
+          JOIN etapas e ON e.id_proceso = pr.id AND e.orden = 1 AND e.estado = 'activo'
+          WHERE pr.estado = 'activo'
+          ORDER BY pr.id DESC LIMIT 1
+        `);
+        if (fallbackQ.rows.length && fallbackQ.rows[0].id_revisor) {
+          etapa = fallbackQ.rows[0];
+        }
+      }
+
+      if (etapa && etapa.id_revisor) {
         await client.query(`
           INSERT INTO tareas (id_expediente, id_usuario_asignado, id_etapa, estado)
           VALUES ($1, $2, $3, 'ABIERTA')

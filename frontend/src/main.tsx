@@ -4,6 +4,9 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { FluentProvider, webLightTheme } from '@fluentui/react-components'
 import Login from './pages/Login'
+import Register from './pages/Register'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 import Dashboard from './pages/Dashboard'
 import Expedientes from './pages/Expedientes'
 import ExpedienteDetail from './pages/ExpedienteDetail'
@@ -57,6 +60,9 @@ function App() {
     <FluentProvider theme={webLightTheme}>
       <Routes>
         <Route path="/login" element={token ? <Navigate to="/" replace /> : <Login />} />
+        <Route path="/register" element={token ? <Navigate to="/" replace /> : <Register />} />
+        <Route path="/forgot-password" element={token ? <Navigate to="/" replace /> : <ForgotPassword />} />
+        <Route path="/reset-password" element={token ? <Navigate to="/" replace /> : <ResetPassword />} />
         <Route path="/" element={<PrivateRoutes />}>
           <Route index element={<Dashboard />} />
           <Route path="expedientes" element={<Expedientes />} />

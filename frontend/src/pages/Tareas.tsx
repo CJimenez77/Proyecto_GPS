@@ -34,6 +34,24 @@ export default function Tareas() {
   const [comentario, setComentario] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [downloadUrls, setDownloadUrls] = useState<{ url: string; nombre_archivo: string; content_type: string }[]>([]);
+
+  useEffect(() => {
+    if (activeExpediente) {
+      api.getExpedienteUrl(activeExpediente.id)
+        .then(data => {
+          if ((data as any).archivos) {
+            setDownloadUrls((data as any).archivos);
+          } else {
+            setDownloadUrls([{ url: data.url, nombre_archivo: data.nombre_archivo, content_type: data.content_type || '' }]);
+          }
+        })
+        .catch(e => console.error(e));
+    } else {
+      setDownloadUrls([]);
+    }
+  }, [activeExpediente]);
+
   useEffect(() => { loadTareas(); }, [filtroEstado]);
 
   const loadTareas = async () => {
@@ -193,20 +211,30 @@ export default function Tareas() {
                 </div>
               ) : activeExpediente && (
                 <>
-                  {/* Archivo */}
-                  <div style={{ padding: 12, backgroundColor: '#fff', borderRadius: 8, border: '1px solid #e0e0e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <Text weight="semibold" size={300} block>Archivo adjunto</Text>
-                      <Text size={200} style={{ color: 'gray' }}>{activeExpediente.nombre_archivo}</Text>
-                    </div>
-                    <Button
-                      appearance="outline"
-                      size="small"
-                      icon={<ArrowDownload24Regular />}
-                      onClick={() => handleDownload(activeExpediente.id)}
-                    >
-                      Descargar
-                    </Button>
+                  {/* Archivos */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <Text weight="semibold" size={300} block>Archivo(s) Adjunto(s)</Text>
+                    {downloadUrls.map((item, idx) => (
+                      <div key={idx} style={{ padding: '10px 14px', backgroundColor: '#fff', borderRadius: 8, border: '1px solid #e0e0e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden', maxWidth: '75%' }}>
+                          <Text size={200} style={{ color: '#323130', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>📄 {item.nombre_archivo}</Text>
+                        </div>
+                        <Button
+                          appearance="outline"
+                          size="small"
+                          icon={<ArrowDownload24Regular />}
+                          onClick={() => window.open(item.url, '_blank')}
+                        >
+                          Descargar
+                        </Button>
+                      </div>
+                    ))}
+                    {downloadUrls.length === 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Spinner size="tiny" />
+                        <Text size={200} style={{ color: 'gray' }}>Cargando enlaces de descarga...</Text>
+                      </div>
+                    )}
                   </div>
 
                   {/* Metadatos del formulario dinámico */}

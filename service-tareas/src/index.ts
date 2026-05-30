@@ -44,16 +44,18 @@ const requireAdmin = (req: Request, res: Response, next: express.NextFunction) =
 
 const TAREA_SELECT = `
   SELECT t.*, e.titulo AS expediente_titulo, e.estado AS expediente_estado,
-         e.id_proyecto, e.id_disciplina,
+         e.id_proyecto, e.id_disciplina, e.version AS expediente_version,
          u.nombre AS asignado_a_nombre,
          p.nombre AS proyecto_nombre, d.nombre AS disciplina_nombre,
-         a.id AS id_area
+         a.id AS id_area,
+         et.nombre AS etapa_nombre
   FROM tareas t
   JOIN expedientes e ON e.id = t.id_expediente
   JOIN usuarios u ON u.id = t.id_usuario_asignado
   JOIN proyectos p ON p.id = e.id_proyecto
   JOIN disciplinas d ON d.id = e.id_disciplina
   JOIN areas a ON a.id = p.id_area
+  LEFT JOIN etapas et ON et.id = t.id_etapa
 `;
 
 // ─── Health ───────────────────────────────────────────────────────────────────
