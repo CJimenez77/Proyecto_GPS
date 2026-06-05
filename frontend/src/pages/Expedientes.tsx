@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Text, Badge, Input, Field, Drawer, DrawerHeader, DrawerBody, DrawerFooter, Spinner, Divider } from '@fluentui/react-components';
-import { Add24Regular, Search24Regular, FolderOpen24Regular, Form24Regular, Dismiss24Regular } from '@fluentui/react-icons';
+import { Add24Regular, Search24Regular, FolderOpen24Regular, Form24Regular, Dismiss24Regular, Filter24Regular } from '@fluentui/react-icons';
 import { api, getCurrentUser } from '../api';
 import type { Expediente, JerarquiaEmpresa, Formulario } from '../entities';
 
@@ -30,6 +30,16 @@ export default function Expedientes() {
   const [jerarquia, setJerarquia] = useState<JerarquiaEmpresa[]>([]);
   const [todosFormularios, setTodosFormularios] = useState<Formulario[]>([]);
   const [search, setSearch] = useState('');
+
+  // Advanced filters state
+  const [filterTitulo, setFilterTitulo] = useState('');
+  const [filterProyecto, setFilterProyecto] = useState(0);
+  const [filterDisciplina, setFilterDisciplina] = useState(0);
+  const [filterEstado, setFilterEstado] = useState('');
+  const [filterFechaDesde, setFilterFechaDesde] = useState('');
+  const [filterFechaHasta, setFilterFechaHasta] = useState('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   // Drawer state
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -99,6 +109,55 @@ export default function Expedientes() {
       setFormulario(f);
       setRespuestas({});
     } catch (e) { console.error(e); }
+  };
+
+  // Flatten projects and disciplines from jerarquia for filter dropdowns
+  const allProjects = jerarquia.flatMap(emp =>
+    emp.areas.flatMap(a => a.proyectos)
+  );
+
+  // We filter disciplines by selected project to make it dynamic
+  const filteredDisciplines = filterProyecto
+    ? allProjects.find(p => p.id === filterProyecto)?.disciplinas || []
+    : jerarquia.flatMap(emp => emp.areas.flatMap(a => a.proyectos.flatMap(p => p.disciplinas)));
+
+  const handleApplyFilters = async () => {
+    try {
+      setLoading(true);
+      const params: any = {
+        titulo: filterTitulo || undefined,
+        id_proyecto: filterProyecto || undefined,
+        id_disciplina: filterDisciplina || undefined,
+        estado: filterEstado || undefined,
+        fecha_desde: filterFechaDesde || undefined,
+        fecha_hasta: filterFechaHasta || undefined,
+      };
+      const res = await api.getExpedientes(params);
+      setExpedientes(res);
+    } catch (e) {
+      console.error(e);
+      alert('Error al aplicar filtros');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClearFilters = async () => {
+    setFilterTitulo('');
+    setFilterProyecto(0);
+    setFilterDisciplina(0);
+    setFilterEstado('');
+    setFilterFechaDesde('');
+    setFilterFechaHasta('');
+    try {
+      setLoading(true);
+      const res = await api.getExpedientes();
+      setExpedientes(res);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filtered = expedientes.filter(e =>
@@ -200,9 +259,73 @@ export default function Expedientes() {
       </div>
 
       <div style={cardStyle}>
-        <div style={{ marginBottom: 16 }}>
-          <Input contentBefore={<Search24Regular />} placeholder="Buscar..." value={search} onChange={(_, d) => setSearch(d.value)} style={{ width: 300 }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 16, flexWrap: 'wrap' }}>
+          <Input contentBefore={<Search24Regular />} placeholder="Buscar en resultados..." value={search} onChange={(_, d) => setSearch(d.value)} style={{ width: 300 }} />
+          <Button 
+            icon={<Filter24Regular />} 
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            appearance={showAdvancedFilters ? 'primary' : 'outline'}
+          >
+            {showAdvancedFilters ? 'Ocultar Filtros' : 'Filtros Avanzados'}
+          </Button>
         </div>
+
+        {showAdvancedFilters && (
+          <div style={{ 
+            backgroundColor: '#fafafa', 
+            border: '1px solid #e2e8f0', 
+            borderRadius: 6, 
+            padding: 16, 
+            marginBottom: 20,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12
+          }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+              <Field label="Buscar por Título">
+                <Input value={filterTitulo} onChange={(_, d) => setFilterTitulo(d.value)} placeholder="Ej: Plano..." />
+              </Field>
+
+              <Field label="Proyecto">
+                <select style={selectStyle} value={filterProyecto} onChange={e => { setFilterProyecto(Number(e.target.value)); setFilterDisciplina(0); }}>
+                  <option value={0}>Todos los proyectos</option>
+                  {allProjects.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                </select>
+              </Field>
+
+              <Field label="Disciplina">
+                <select style={selectStyle} value={filterDisciplina} onChange={e => setFilterDisciplina(Number(e.target.value))}>
+                  <option value={0}>Todas las disciplinas</option>
+                  {filteredDisciplines.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+                </select>
+              </Field>
+
+              <Field label="Estado">
+                <select style={selectStyle} value={filterEstado} onChange={e => setFilterEstado(e.target.value)}>
+                  <option value="">Todos</option>
+                  <option value="PENDIENTE">Pendiente</option>
+                  <option value="APROBADO">Aprobado</option>
+                  <option value="RECHAZADO">Rechazado</option>
+                </select>
+              </Field>
+
+              <Field label="Desde (Fecha)">
+                <input type="date" style={selectStyle} value={filterFechaDesde} onChange={e => setFilterFechaDesde(e.target.value)} />
+              </Field>
+
+              <Field label="Hasta (Fecha)">
+                <input type="date" style={selectStyle} value={filterFechaHasta} onChange={e => setFilterFechaHasta(e.target.value)} />
+              </Field>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+              <Button onClick={handleClearFilters} appearance="subtle">Limpiar</Button>
+              <Button onClick={handleApplyFilters} appearance="primary" disabled={loading}>
+                {loading ? <Spinner size="extra-tiny" /> : 'Aplicar Filtros'}
+              </Button>
+            </div>
+          </div>
+        )}
         {filtered.length === 0 ? (
           <Text>No hay expedientes</Text>
         ) : (

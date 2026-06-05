@@ -61,7 +61,23 @@ export const api = {
     request(`${API_USUARIOS}/reset-password`, { method: 'POST', body: JSON.stringify({ token, password }) }),
 
   // Expedientes
-  getExpedientes: (): Promise<Expediente[]> => request(`${API_EXPEDIENTES}/expedientes`),
+  getExpedientes: (params?: { id_proyecto?: number; id_disciplina?: number; estado?: string; titulo?: string; fecha_desde?: string; fecha_hasta?: string }): Promise<Expediente[]> => {
+    const query = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, val]) => {
+        if (val !== undefined && val !== null && val !== '') {
+          query.set(key, val.toString());
+        }
+      });
+    }
+    const queryString = query.toString();
+    return request(`${API_EXPEDIENTES}/expedientes${queryString ? `?${queryString}` : ''}`);
+  },
+  getStats: (): Promise<{
+    estados: { estado: string; cantidad: string | number }[];
+    areas: { area: string; cantidad: string | number }[];
+    revisores: { revisor: string; cantidad: string | number }[];
+  }> => request(`${API_EXPEDIENTES}/stats`),
   getExpediente: (id: number): Promise<Expediente> => request(`${API_EXPEDIENTES}/expedientes/${id}`),
   getExpedienteVersiones: (id: number): Promise<ExpedienteVersion[]> => request(`${API_EXPEDIENTES}/expedientes/${id}/versiones`),
   getExpedienteUrl: (id: number): Promise<{url: string, nombre_archivo: string}> => request(`${API_EXPEDIENTES}/expedientes/${id}/url`),

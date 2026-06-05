@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
+import nodemailer from 'nodemailer';
 import pkg from 'pg';
 const { Pool } = pkg;
 
@@ -21,6 +22,17 @@ const pool = new Pool({
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || 'postgres',
   ssl: false,
+});
+
+// Configuración del transportador SMTP para correos reales
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: process.env.SMTP_SECURE === 'true', // true para puerto 465, false para 587
+  auth: {
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+  },
 });
 
 interface User { id: number; username: string; rol: string; id_area: number | null; }
@@ -60,6 +72,74 @@ const TAREA_SELECT = `
 
 // ─── Health ───────────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'service-tareas' }));
+
+// ─── POST /tareas (internal endpoint to create a task and notify the reviewer) ──
+app.post('/tareas', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id_expediente, id_usuario_asignado, id_etapa } = req.body;
+    if (!id_expediente || !id_usuario_asignado || !id_etapa) {
+      res.status(400).json({ error: 'id_expediente, id_usuario_asignado e id_etapa son requeridos' });
+      return;
+    }
+
+    const r = await pool.query(
+      `INSERT INTO tareas (id_expediente, id_usuario_asignado, id_etapa, estado)
+       VALUES ($1, $2, $3, 'ABIERTA') RETURNING *`,
+      [id_expediente, id_usuario_asignado, id_etapa]
+    );
+    const tarea = r.rows[0];
+
+    // Obtener detalles del revisor y del expediente para el correo
+    const detailsQ = await pool.query(
+      `SELECT u.nombre AS revisor_nombre, u.email AS revisor_email, e.titulo AS expediente_titulo
+       FROM usuarios u, expedientes e
+       WHERE u.id = $1 AND e.id = $2`,
+      [id_usuario_asignado, id_expediente]
+    );
+
+    if (detailsQ.rows.length > 0) {
+      const { revisor_nombre, revisor_email, expediente_titulo } = detailsQ.rows[0];
+
+      if (process.env.SMTP_USER && process.env.SMTP_PASS && revisor_email) {
+        try {
+          const link = `http://pacheco.chillan.ubiobio.cl:8028/expedientes/${id_expediente}`;
+
+          await transporter.sendMail({
+            from: process.env.SMTP_FROM || `"GPS Seguridad" <${process.env.SMTP_USER}>`,
+            to: revisor_email,
+            subject: '📋 Nueva tarea de revisión asignada - GPS',
+            html: `
+              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e6ed; border-radius: 8px;">
+                <h2 style="color: #0078d4; text-align: center;">Nueva Tarea de Revisión</h2>
+                <p>Hola <strong>${revisor_nombre}</strong>,</p>
+                <p>Se te ha asignado una nueva tarea de revisión en el Sistema de Gestión Documental de GPS.</p>
+                <div style="background-color: #f5f7fa; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #0078d4;">
+                  <p style="margin: 0; font-size: 16px;"><strong>Expediente:</strong> ${expediente_titulo}</p>
+                </div>
+                <p>Por favor, ingresa al sistema para revisar el expediente y resolver la aprobación o rechazo del mismo.</p>
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${link}" style="background-color: #0078d4; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Ver Expediente</a>
+                </div>
+                <hr style="border: none; border-top: 1px solid #e0e6ed; margin: 20px 0;" />
+                <p style="font-size: 12px; color: gray; text-align: center;">Este es un correo automático. Por favor no respondas a este mensaje.</p>
+              </div>
+            `,
+          });
+          console.log(`[Email] Notificación enviada a ${revisor_email} por expediente ${id_expediente}`);
+        } catch (mailError) {
+          console.error('[Email] Error al enviar correo de notificación:', mailError);
+        }
+      } else {
+        console.warn('[Email] Configuración SMTP incompleta o vacía. Saltando envío de correo.');
+      }
+    }
+
+    res.status(201).json(tarea);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
 
 // ─── GET /mis-tareas ──────────────────────────────────────────────────────────
 app.get('/mis-tareas', authenticateToken, async (req: Request, res: Response): Promise<void> => {

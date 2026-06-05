@@ -74,11 +74,50 @@ const requireRoles = (...roles: string[]) => (req: Request, res: Response, next:
 // ─── Health ───────────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'service-expedientes' }));
 
+// ─── GET /stats (Dashboard Metrics) ───────────────────────────────────────────
+app.get('/stats', authenticateToken, async (req: Request, res: Response): Promise<void> => {
+  try {
+    // 1. Expedientes por estado
+    const estadosQ = await pool.query(`
+      SELECT estado, COUNT(*) as cantidad
+      FROM expedientes
+      GROUP BY estado
+    `);
+
+    // 2. Expedientes por área
+    const areasQ = await pool.query(`
+      SELECT a.nombre as area, COUNT(e.id) as cantidad
+      FROM expedientes e
+      JOIN proyectos p ON p.id = e.id_proyecto
+      JOIN areas a ON a.id = p.id_area
+      GROUP BY a.nombre
+    `);
+
+    // 3. Tareas pendientes por revisor
+    const revisoresQ = await pool.query(`
+      SELECT u.nombre as revisor, COUNT(t.id) as cantidad
+      FROM usuarios u
+      LEFT JOIN tareas t ON t.id_usuario_asignado = u.id AND t.estado IN ('ABIERTA', 'EN_REVISION')
+      WHERE u.rol = 'revisor'
+      GROUP BY u.nombre
+    `);
+
+    res.json({
+      estados: estadosQ.rows,
+      areas: areasQ.rows,
+      revisores: revisoresQ.rows
+    });
+  } catch (e) {
+    console.error('[Stats] Error al obtener estadísticas:', e);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
 // ─── GET /expedientes ─────────────────────────────────────────────────────────
 app.get('/expedientes', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
     const user: User = (req as any).user;
-    const { id_proyecto, id_disciplina, estado } = req.query;
+    const { id_proyecto, id_disciplina, estado, titulo, fecha_desde, fecha_hasta } = req.query;
 
     let q = `
       SELECT e.*, p.nombre AS proyecto_nombre, d.nombre AS disciplina_nombre,
@@ -106,6 +145,9 @@ app.get('/expedientes', authenticateToken, async (req: Request, res: Response): 
     if (id_proyecto) { q += ` AND e.id_proyecto = $${i++}`; vals.push(id_proyecto); }
     if (id_disciplina) { q += ` AND e.id_disciplina = $${i++}`; vals.push(id_disciplina); }
     if (estado) { q += ` AND e.estado = $${i++}`; vals.push(estado); }
+    if (titulo) { q += ` AND e.titulo ILIKE $${i++}`; vals.push(`%${titulo}%`); }
+    if (fecha_desde) { q += ` AND e.created_at >= $${i++}`; vals.push(fecha_desde); }
+    if (fecha_hasta) { q += ` AND e.created_at <= $${i++}`; vals.push(`${fecha_hasta} 23:59:59`); }
     q += ' ORDER BY e.created_at DESC';
 
     const r = await pool.query(q, vals);
@@ -365,16 +407,38 @@ app.post('/expedientes',
         }
       }
 
+      await client.query('COMMIT');
+
+      // Asignación de tarea por HTTP (fuera de la transacción de base de datos)
       if (etapa && etapa.id_revisor) {
-        await client.query(`
-          INSERT INTO tareas (id_expediente, id_usuario_asignado, id_etapa, estado)
-          VALUES ($1, $2, $3, 'ABIERTA')
-        `, [expediente.id, etapa.id_revisor, etapa.etapa_id]);
+        try {
+          // Intentar buscar un revisor activo asignado al área en la tabla de usuarios
+          const revisorAreaQ = await client.query(
+            "SELECT id FROM usuarios WHERE rol = 'revisor' AND id_area = $1 AND estado = 'activo' LIMIT 1",
+            [id_area_proyecto]
+          );
+          const id_usuario_revisor = revisorAreaQ.rows.length ? revisorAreaQ.rows[0].id : etapa.id_revisor;
+
+          const TAREAS_SERVICE_URL = process.env.TAREAS_SERVICE_URL || 'http://service-tareas:3004';
+          const tRes = await fetch(`${TAREAS_SERVICE_URL}/tareas`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id_expediente: expediente.id,
+              id_usuario_asignado: id_usuario_revisor,
+              id_etapa: etapa.etapa_id
+            })
+          });
+          if (!tRes.ok) {
+            console.error(`[Error] Falló la creación de tarea en service-tareas: ${tRes.statusText}`);
+          }
+        } catch (err) {
+          console.error('[Error] No se pudo conectar con service-tareas:', err);
+        }
       } else {
         console.warn(`[ADVERTENCIA] No existe proceso/etapa configurada (ni siquiera fallback) para área ${id_area_proyecto}. Expediente ${expediente.id} creado sin tarea.`);
       }
 
-      await client.query('COMMIT');
       res.status(201).json(expediente);
     } catch (e) {
       await client.query('ROLLBACK');
@@ -476,14 +540,36 @@ app.post('/expedientes/:id/nueva-version',
         }
       }
 
+      await client.query('COMMIT');
+
+      // Asignación de tarea por HTTP (fuera de la transacción de base de datos)
       if (etapa && etapa.id_revisor) {
-        await client.query(`
-          INSERT INTO tareas (id_expediente, id_usuario_asignado, id_etapa, estado)
-          VALUES ($1, $2, $3, 'ABIERTA')
-        `, [expediente.id, etapa.id_revisor, etapa.etapa_id]);
+        try {
+          // Intentar buscar un revisor activo asignado al área en la tabla de usuarios
+          const revisorAreaQ = await client.query(
+            "SELECT id FROM usuarios WHERE rol = 'revisor' AND id_area = $1 AND estado = 'activo' LIMIT 1",
+            [id_area]
+          );
+          const id_usuario_revisor = revisorAreaQ.rows.length ? revisorAreaQ.rows[0].id : etapa.id_revisor;
+
+          const TAREAS_SERVICE_URL = process.env.TAREAS_SERVICE_URL || 'http://service-tareas:3004';
+          const tRes = await fetch(`${TAREAS_SERVICE_URL}/tareas`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id_expediente: expediente.id,
+              id_usuario_asignado: id_usuario_revisor,
+              id_etapa: etapa.etapa_id
+            })
+          });
+          if (!tRes.ok) {
+            console.error(`[Error] Falló la creación de tarea en service-tareas: ${tRes.statusText}`);
+          }
+        } catch (err) {
+          console.error('[Error] No se pudo conectar con service-tareas:', err);
+        }
       }
 
-      await client.query('COMMIT');
       res.status(201).json(expediente);
     } catch (e) {
       await client.query('ROLLBACK');

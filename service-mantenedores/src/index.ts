@@ -444,15 +444,53 @@ app.put('/formularios/:id', authenticateToken, requireAdmin, async (req: Request
     if (!r.rows.length) { await client.query('ROLLBACK'); res.status(404).json({ error: 'No encontrado' }); return; }
 
     if (Array.isArray(campos)) {
-      await client.query('DELETE FROM campos_formulario WHERE id_formulario = $1', [req.params.id]);
+      // Obtener los IDs de campos existentes en la base de datos para este formulario
+      const existingRes = await client.query('SELECT id FROM campos_formulario WHERE id_formulario = $1', [req.params.id]);
+      const existingIds: number[] = existingRes.rows.map(r => Number(r.id));
+
+      // Identificar IDs que deben eliminarse (están en la base de datos pero no vienen en la petición)
+      const incomingIds: number[] = campos
+        .map(c => c.id ? Number(c.id) : null)
+        .filter((id): id is number => id !== null);
+      const idsToDelete = existingIds.filter(id => !incomingIds.includes(id));
+
+      if (idsToDelete.length > 0) {
+        await client.query('DELETE FROM campos_formulario WHERE id = ANY($1)', [idsToDelete]);
+      }
+
+      // Insertar nuevos o actualizar los existentes
       for (const campo of campos) {
-        await client.query(
-          `INSERT INTO campos_formulario (id_formulario, nombre, etiqueta, tipo, opciones, requerido, orden)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [req.params.id, campo.nombre, campo.etiqueta, campo.tipo,
-           campo.opciones ? JSON.stringify(campo.opciones) : null,
-           campo.requerido || false, campo.orden || 1]
-        );
+        const campoId = campo.id ? Number(campo.id) : null;
+        if (campoId && existingIds.includes(campoId)) {
+          await client.query(
+            `UPDATE campos_formulario 
+             SET nombre = $1, etiqueta = $2, tipo = $3, opciones = $4, requerido = $5, orden = $6
+             WHERE id = $7`,
+            [
+              campo.nombre,
+              campo.etiqueta,
+              campo.tipo,
+              campo.opciones ? JSON.stringify(campo.opciones) : null,
+              campo.requerido || false,
+              campo.orden || 1,
+              campoId
+            ]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO campos_formulario (id_formulario, nombre, etiqueta, tipo, opciones, requerido, orden)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+              req.params.id,
+              campo.nombre,
+              campo.etiqueta,
+              campo.tipo,
+              campo.opciones ? JSON.stringify(campo.opciones) : null,
+              campo.requerido || false,
+              campo.orden || 1
+            ]
+          );
+        }
       }
     }
     await client.query('COMMIT');
