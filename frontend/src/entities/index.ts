@@ -85,3 +85,35 @@ export interface Tarea {
   proyecto_nombre?: string;
   disciplina_nombre?: string;
 }
+
+export interface Proceso {
+  id: number;
+  nombre: string;
+  id_area: number;
+  estado: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Etapa {
+  id: number;
+  nombre: string;
+  orden: number;
+  id_proceso: number;
+  id_revisor: number | null;
+  estado: string;
+  revisor_nombre?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface HistorialExpediente {
+  id: number;
+  id_expediente: number;
+  evento: string;
+  descripcion: string;
+  id_usuario: number;
+  usuario_nombre?: string;
+  expediente_version?: number;
+  created_at: string;
+}

@@ -8,11 +8,12 @@ import {
   Add24Regular, Edit24Regular, Delete24Regular,
   Building24Regular, Folder24Regular,
   DocumentFolder24Regular, AppFolder24Regular, Form24Regular,
+  Flowchart24Regular, Person24Regular, ArrowRight24Regular
 } from '@fluentui/react-icons';
 import { api, getCurrentUser } from '../api';
-import type { Empresa, Area, Proyecto, Disciplina, Formulario, CampoFormulario } from '../entities';
+import type { Empresa, Area, Proyecto, Disciplina, Formulario, CampoFormulario, Proceso, Etapa, Usuario } from '../entities';
 
-type TabId = 'empresas' | 'areas' | 'proyectos' | 'disciplinas' | 'formularios';
+type TabId = 'empresas' | 'areas' | 'proyectos' | 'disciplinas' | 'formularios' | 'procesos';
 type CampoTipo = 'texto' | 'lista' | 'fecha';
 
 const cellStyle: React.CSSProperties = { padding: '10px 12px', borderBottom: '1px solid #f0f0f0' };
@@ -45,9 +46,17 @@ export default function Mantenedores() {
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
   const [formularios, setFormularios] = useState<Formulario[]>([]);
+  const [procesos, setProcesos] = useState<Proceso[]>([]);
+  const [revisores, setRevisores] = useState<Usuario[]>([]);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
+
+  // Workflow designer specific states
+  const [expandedProcesos, setExpandedProcesos] = useState<Record<number, boolean>>({});
+  const [procesoEtapas, setProcesoEtapas] = useState<Record<number, Etapa[]>>({});
+  const [processDrawerOpen, setProcessDrawerOpen] = useState(false);
+  const [stageDrawerOpen, setStageDrawerOpen] = useState(false);
 
   // Forms
   const [empForm, setEmpForm] = useState({ nombre: '', rut: '' });
@@ -56,26 +65,62 @@ export default function Mantenedores() {
   const [discForm, setDiscForm] = useState({ nombre: '', id_proyecto: 0 });
   const [formForm, setFormForm] = useState({ nombre: '', id_proyecto: 0, id_disciplina: 0 });
   const [campos, setCampos] = useState<CampoEdit[]>([emptyCampo(1)]);
+  const [procesoForm, setProcesoForm] = useState({ nombre: '', id_area: 0 });
+  const [etapaForm, setEtapaForm] = useState({ nombre: '', orden: 1, id_revisor: 0, id_proceso: 0 });
+
+  const [editProcesoId, setEditProcesoId] = useState<number | null>(null);
+  const [editEtapaId, setEditEtapaId] = useState<number | null>(null);
 
   useEffect(() => { loadAll(); }, []);
 
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [e, a, p, d, fList] = await Promise.all([
+      const [e, a, p, d, fList, procs, usrs] = await Promise.all([
         api.getEmpresas(), api.getAreas(), api.getProyectos(),
         api.getDisciplinas(), api.getFormularios(),
+        api.getProcesos(), api.getUsuarios()
       ]);
       // Cargar cada formulario con sus campos para mostrar conteo correcto
       const fFull = await Promise.all(fList.map(f => api.getFormulario(f.id)));
       setEmpresas(e); setAreas(a); setProyectos(p); setDisciplinas(d); setFormularios(fFull);
+      setProcesos(procs);
+      setRevisores(usrs.filter(u => u.rol === 'revisor'));
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
+  };
+
+  const toggleProceso = async (procId: number) => {
+    const isExpanded = !expandedProcesos[procId];
+    setExpandedProcesos(prev => ({ ...prev, [procId]: isExpanded }));
+    if (isExpanded && !procesoEtapas[procId]) {
+      try {
+        const ets = await api.getEtapas(procId);
+        setProcesoEtapas(prev => ({ ...prev, [procId]: ets }));
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
+
+  const refreshEtapas = async (procId: number) => {
+    try {
+      const ets = await api.getEtapas(procId);
+      setProcesoEtapas(prev => ({ ...prev, [procId]: ets }));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   if (user?.rol !== 'administrador') return <Text>No tienes permisos para acceder a mantenedores.</Text>;
 
   const openCreate = () => {
+    if (tab === 'procesos') {
+      setEditProcesoId(null);
+      setProcesoForm({ nombre: '', id_area: 0 });
+      setProcessDrawerOpen(true);
+      return;
+    }
     setEditId(null);
     setEmpForm({ nombre: '', rut: '' });
     setAreaForm({ nombre: '', id_empresa: 0 });
@@ -84,6 +129,26 @@ export default function Mantenedores() {
     setFormForm({ nombre: '', id_proyecto: 0, id_disciplina: 0 });
     setCampos([emptyCampo(1)]);
     setDrawerOpen(true);
+  };
+
+  const openEditProceso = (proc: Proceso) => {
+    setEditProcesoId(proc.id);
+    setProcesoForm({ nombre: proc.nombre, id_area: proc.id_area });
+    setProcessDrawerOpen(true);
+  };
+
+  const openCreateEtapa = (procesoId: number) => {
+    setEditEtapaId(null);
+    const currentEtapas = procesoEtapas[procesoId] || [];
+    const nextOrden = currentEtapas.length > 0 ? Math.max(...currentEtapas.map(et => et.orden)) + 1 : 1;
+    setEtapaForm({ nombre: '', orden: nextOrden, id_revisor: 0, id_proceso: procesoId });
+    setStageDrawerOpen(true);
+  };
+
+  const openEditEtapa = (procesoId: number, et: Etapa) => {
+    setEditEtapaId(et.id);
+    setEtapaForm({ nombre: et.nombre, orden: et.orden, id_revisor: et.id_revisor || 0, id_proceso: procesoId });
+    setStageDrawerOpen(true);
   };
 
   const openEditForm = async (f: Formulario) => {
@@ -168,6 +233,47 @@ export default function Mantenedores() {
     } catch (e: any) { alert('Error: ' + e.message); }
   };
 
+  const handleSaveProceso = async () => {
+    if (!procesoForm.nombre || !procesoForm.id_area) { alert('Nombre y área requeridos'); return; }
+    try {
+      if (editProcesoId) {
+        const updated = await api.updateProceso(editProcesoId, procesoForm);
+        setProcesos(procesos.map(p => p.id === editProcesoId ? updated : p));
+      } else {
+        const created = await api.createProceso(procesoForm);
+        setProcesos([...procesos, created]);
+      }
+      setProcessDrawerOpen(false);
+    } catch (err: any) { alert('Error: ' + err.message); }
+  };
+
+  const handleSaveEtapa = async () => {
+    if (!etapaForm.nombre || !etapaForm.orden || !etapaForm.id_proceso) { alert('Nombre, orden y proceso son requeridos'); return; }
+    try {
+      const payload = {
+        nombre: etapaForm.nombre,
+        orden: Number(etapaForm.orden),
+        id_proceso: etapaForm.id_proceso,
+        id_revisor: etapaForm.id_revisor ? Number(etapaForm.id_revisor) : null
+      };
+      if (editEtapaId) {
+        await api.updateEtapa(editEtapaId, payload);
+      } else {
+        await api.createEtapa(payload);
+      }
+      refreshEtapas(etapaForm.id_proceso);
+      setStageDrawerOpen(false);
+    } catch (err: any) { alert('Error: ' + err.message); }
+  };
+
+  const toggleProcesoEstado = async (proc: Proceso) => {
+    const nuevoEstado = proc.estado === 'activo' ? 'inactivo' : 'activo';
+    try {
+      const updated = await api.updateProceso(proc.id, { nombre: proc.nombre, id_area: proc.id_area, estado: nuevoEstado });
+      setProcesos(procesos.map(p => p.id === proc.id ? updated : p));
+    } catch (err: any) { alert('Error: ' + err.message); }
+  };
+
   const toggleEstado = async (entity: Empresa | Area | Proyecto | Disciplina, t: TabId) => {
     const nuevo = entity.estado === 'activo' ? 'inactivo' : 'activo';
     try {
@@ -185,7 +291,7 @@ export default function Mantenedores() {
 
   const tabLabel: Record<TabId, string> = {
     empresas: 'Nueva Empresa', areas: 'Nueva Área', proyectos: 'Nuevo Proyecto',
-    disciplinas: 'Nueva Disciplina', formularios: 'Nuevo Formulario',
+    disciplinas: 'Nueva Disciplina', formularios: 'Nuevo Formulario', procesos: 'Nuevo Proceso'
   };
 
   const accionCampo = (idx: number, key: keyof CampoEdit, val: any) =>
@@ -207,6 +313,7 @@ export default function Mantenedores() {
         <Tab icon={<DocumentFolder24Regular />} value="proyectos">Proyectos</Tab>
         <Tab icon={<AppFolder24Regular />} value="disciplinas">Disciplinas</Tab>
         <Tab icon={<Form24Regular />} value="formularios">Formularios</Tab>
+        <Tab icon={<Flowchart24Regular />} value="procesos">Diseñador de Flujos</Tab>
       </TabList>
 
       <div style={{ backgroundColor: 'white', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
@@ -321,6 +428,91 @@ export default function Mantenedores() {
                     ))}
                 </tbody>
               </table>
+            )}
+
+            {/* PROCESOS */}
+            {tab === 'procesos' && (
+              <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {procesos.length === 0 ? (
+                  <div style={{ padding: 20, textAlign: 'center', color: 'gray' }}>Sin procesos creados.</div>
+                ) : (
+                  procesos.map(proc => {
+                    const isExpanded = expandedProcesos[proc.id];
+                    const etapas = procesoEtapas[proc.id] || [];
+                    return (
+                      <div key={proc.id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', backgroundColor: '#fafafa' }}>
+                        <div style={{ 
+                          padding: '12px 16px', 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'center', 
+                          backgroundColor: '#f1f5f9', 
+                          cursor: 'pointer',
+                          borderBottom: isExpanded ? '1px solid #e2e8f0' : 'none'
+                        }} onClick={() => toggleProceso(proc.id)}>
+                          <div>
+                            <Text weight="semibold" style={{ fontSize: 16 }}>{proc.nombre}</Text>
+                            <Text block size={200} style={{ color: 'gray' }}>Área: {areaNombre(proc.id_area)}</Text>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={e => e.stopPropagation()}>
+                            <Badge color={proc.estado === 'activo' ? 'success' : 'danger'}>{proc.estado}</Badge>
+                            <Button size="small" appearance="subtle" icon={<Edit24Regular />} onClick={() => openEditProceso(proc)}>Editar</Button>
+                            <Button size="small" appearance="subtle" onClick={() => toggleProcesoEstado(proc)}>
+                              {proc.estado === 'activo' ? 'Desactivar' : 'Activar'}
+                            </Button>
+                            <Button size="small" appearance="subtle" onClick={() => toggleProceso(proc.id)}>
+                              {isExpanded ? 'Contraer' : 'Expandir'}
+                            </Button>
+                          </div>
+                        </div>
+
+                        {isExpanded && (
+                          <div style={{ padding: 16, backgroundColor: 'white' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                              <Text weight="semibold">Flujo de Aprobación (Etapas)</Text>
+                              <Button size="small" appearance="primary" icon={<Add24Regular />} onClick={() => openCreateEtapa(proc.id)}>
+                                Agregar Etapa
+                              </Button>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '10px 0' }}>
+                              {etapas.length === 0 ? (
+                                <Text style={{ color: 'gray', fontStyle: 'italic' }}>Este proceso no tiene etapas. Agrega una para comenzar.</Text>
+                              ) : (
+                                etapas.map((etapa, idx) => (
+                                  <div key={etapa.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                    {idx > 0 && <ArrowRight24Regular style={{ color: '#0078d4' }} />}
+                                    
+                                    <div style={{ 
+                                      padding: '12px 16px', 
+                                      border: '1px solid #c5d0f0', 
+                                      borderRadius: 8, 
+                                      backgroundColor: '#f0f4ff', 
+                                      minWidth: 160,
+                                      position: 'relative',
+                                      boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
+                                    }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                        <Badge appearance="tint" color="brand">#{etapa.orden}</Badge>
+                                        <Button size="small" appearance="subtle" icon={<Edit24Regular />} onClick={() => openEditEtapa(proc.id, etapa)} />
+                                      </div>
+                                      <Text weight="semibold" block style={{ fontSize: 14 }}>{etapa.nombre}</Text>
+                                      <Text size={100} style={{ color: 'gray', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                        <Person24Regular style={{ fontSize: 12 }} />
+                                        {etapa.revisor_nombre || 'Sin revisor'}
+                                      </Text>
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             )}
           </>
         )}
@@ -437,6 +629,61 @@ export default function Mantenedores() {
         <DrawerFooter>
           <Button appearance="secondary" onClick={() => setDrawerOpen(false)}>Cancelar</Button>
           <Button appearance="primary" onClick={handleSave}>{editId ? 'Guardar cambios' : 'Crear'}</Button>
+        </DrawerFooter>
+      </Drawer>
+
+      {/* DRAWER NUEVO/EDITAR PROCESO */}
+      <Drawer open={processDrawerOpen} onOpenChange={(_, o) => setProcessDrawerOpen(o.open)} position="end" size="small">
+        <DrawerHeader>
+          <Text weight="semibold" size={500}>
+            {editProcesoId ? 'Editar Proceso' : 'Nuevo Proceso'}
+          </Text>
+        </DrawerHeader>
+        <DrawerBody>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 8 }}>
+            <Field label="Nombre del Proceso" required>
+              <Input value={procesoForm.nombre} onChange={(_, d) => setProcesoForm({ ...procesoForm, nombre: d.value })} placeholder="Ej: Proceso de Aprobación Civil" />
+            </Field>
+            <Field label="Área de Aprobación" required>
+              <Select value={procesoForm.id_area} onChange={e => setProcesoForm({ ...procesoForm, id_area: Number(e.target.value) })}>
+                <option value={0}>Seleccionar área...</option>
+                {areas.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+              </Select>
+            </Field>
+          </div>
+        </DrawerBody>
+        <DrawerFooter>
+          <Button appearance="secondary" onClick={() => setProcessDrawerOpen(false)}>Cancelar</Button>
+          <Button appearance="primary" onClick={handleSaveProceso}>{editProcesoId ? 'Guardar' : 'Crear'}</Button>
+        </DrawerFooter>
+      </Drawer>
+
+      {/* DRAWER NUEVO/EDITAR ETAPA */}
+      <Drawer open={stageDrawerOpen} onOpenChange={(_, o) => setStageDrawerOpen(o.open)} position="end" size="small">
+        <DrawerHeader>
+          <Text weight="semibold" size={500}>
+            {editEtapaId ? 'Editar Etapa' : 'Nueva Etapa'}
+          </Text>
+        </DrawerHeader>
+        <DrawerBody>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 8 }}>
+            <Field label="Nombre de la Etapa" required>
+              <Input value={etapaForm.nombre} onChange={(_, d) => setEtapaForm({ ...etapaForm, nombre: d.value })} placeholder="Ej: Revisión Inicial" />
+            </Field>
+            <Field label="Orden del Flujo" required hint="El número secuencial en el que se ejecuta la etapa">
+              <Input type="number" value={String(etapaForm.orden)} onChange={(_, d) => setEtapaForm({ ...etapaForm, orden: Number(d.value) })} />
+            </Field>
+            <Field label="Revisor Asignado" required>
+              <Select value={etapaForm.id_revisor} onChange={e => setEtapaForm({ ...etapaForm, id_revisor: Number(e.target.value) })}>
+                <option value={0}>Seleccionar revisor...</option>
+                {revisores.map(r => <option key={r.id} value={r.id}>{r.nombre} ({r.email})</option>)}
+              </Select>
+            </Field>
+          </div>
+        </DrawerBody>
+        <DrawerFooter>
+          <Button appearance="secondary" onClick={() => setStageDrawerOpen(false)}>Cancelar</Button>
+          <Button appearance="primary" onClick={handleSaveEtapa}>{editEtapaId ? 'Guardar' : 'Crear'}</Button>
         </DrawerFooter>
       </Drawer>
     </div>

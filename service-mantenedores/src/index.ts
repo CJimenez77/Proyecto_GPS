@@ -238,15 +238,24 @@ app.put('/disciplinas/:id/estado', authenticateToken, requireAdmin, async (req: 
 });
 
 // ─── PROCESOS ─────────────────────────────────────────────────────────────────
-app.get('/procesos', authenticateToken, async (req: Request, res: Response): Promise<void> => {
+app.get('/procesos', authenticateToken, requireAdmin, async (req: Request, res: Response): Promise<void> => {
   try {
     const { id_area } = req.query;
-    let q = "SELECT * FROM procesos WHERE estado = 'activo'";
+    let q = "SELECT * FROM procesos WHERE 1=1";
     const vals: any[] = [];
-    if (id_area) { q += ' AND id_area = $1'; vals.push(id_area); }
+    let i = 1;
+    if (id_area) { q += ` AND id_area = $${i++}`; vals.push(id_area); }
     q += ' ORDER BY id';
     const r = await pool.query(q, vals);
     res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: 'Error interno' }); }
+});
+
+app.get('/procesos/:id', authenticateToken, requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const r = await pool.query('SELECT * FROM procesos WHERE id = $1', [req.params.id]);
+    if (!r.rows.length) { res.status(404).json({ error: 'No encontrado' }); return; }
+    res.json(r.rows[0]);
   } catch (e) { res.status(500).json({ error: 'Error interno' }); }
 });
 
@@ -259,8 +268,61 @@ app.post('/procesos', authenticateToken, requireAdmin, async (req: Request, res:
   } catch (e) { res.status(500).json({ error: 'Error interno' }); }
 });
 
+app.put('/procesos/:id', authenticateToken, requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { nombre, id_area, estado } = req.body;
+    if (!nombre || !id_area) { res.status(400).json({ error: 'nombre e id_area requeridos' }); return; }
+    const r = await pool.query(
+      'UPDATE procesos SET nombre=$1, id_area=$2, estado=$3, updated_at=CURRENT_TIMESTAMP WHERE id=$4 RETURNING *',
+      [nombre, id_area, estado || 'activo', req.params.id]
+    );
+    if (!r.rows.length) { res.status(404).json({ error: 'No encontrado' }); return; }
+    res.json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: 'Error interno' }); }
+});
+
 // ─── ETAPAS ───────────────────────────────────────────────────────────────────
-app.get('/procesos/:id/etapas', authenticateToken, async (req: Request, res: Response): Promise<void> => {
+app.get('/etapas', authenticateToken, requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id_proceso } = req.query;
+    if (!id_proceso) { res.status(400).json({ error: 'id_proceso es requerido' }); return; }
+    const r = await pool.query(
+      `SELECT e.*, u.nombre AS revisor_nombre FROM etapas e
+       LEFT JOIN usuarios u ON u.id = e.id_revisor
+       WHERE e.id_proceso = $1 ORDER BY e.orden`,
+      [id_proceso]
+    );
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: 'Error interno' }); }
+});
+
+app.post('/etapas', authenticateToken, requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { nombre, orden, id_proceso, id_revisor } = req.body;
+    if (!nombre || !orden || !id_proceso) { res.status(400).json({ error: 'nombre, orden e id_proceso requeridos' }); return; }
+    const r = await pool.query(
+      'INSERT INTO etapas (nombre, orden, id_proceso, id_revisor) VALUES ($1, $2, $3, $4) RETURNING *',
+      [nombre, orden, id_proceso, id_revisor || null]
+    );
+    res.status(201).json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: 'Error interno' }); }
+});
+
+app.put('/etapas/:id', authenticateToken, requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { nombre, orden, id_revisor, estado } = req.body;
+    if (!nombre || !orden) { res.status(400).json({ error: 'nombre y orden requeridos' }); return; }
+    const r = await pool.query(
+      'UPDATE etapas SET nombre=$1, orden=$2, id_revisor=$3, estado=$4, updated_at=CURRENT_TIMESTAMP WHERE id=$5 RETURNING *',
+      [nombre, orden, id_revisor || null, estado || 'activo', req.params.id]
+    );
+    if (!r.rows.length) { res.status(404).json({ error: 'No encontrado' }); return; }
+    res.json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: 'Error interno' }); }
+});
+
+// Mantener por compatibilidad con cualquier otra parte del sistema
+app.get('/procesos/:id/etapas', authenticateToken, requireAdmin, async (req: Request, res: Response): Promise<void> => {
   try {
     const r = await pool.query(
       `SELECT e.*, u.nombre AS revisor_nombre FROM etapas e
@@ -444,15 +506,53 @@ app.put('/formularios/:id', authenticateToken, requireAdmin, async (req: Request
     if (!r.rows.length) { await client.query('ROLLBACK'); res.status(404).json({ error: 'No encontrado' }); return; }
 
     if (Array.isArray(campos)) {
-      await client.query('DELETE FROM campos_formulario WHERE id_formulario = $1', [req.params.id]);
+      // Obtener los IDs de campos existentes en la base de datos para este formulario
+      const existingRes = await client.query('SELECT id FROM campos_formulario WHERE id_formulario = $1', [req.params.id]);
+      const existingIds: number[] = existingRes.rows.map(r => Number(r.id));
+
+      // Identificar IDs que deben eliminarse (están en la base de datos pero no vienen en la petición)
+      const incomingIds: number[] = campos
+        .map(c => c.id ? Number(c.id) : null)
+        .filter((id): id is number => id !== null);
+      const idsToDelete = existingIds.filter(id => !incomingIds.includes(id));
+
+      if (idsToDelete.length > 0) {
+        await client.query('DELETE FROM campos_formulario WHERE id = ANY($1)', [idsToDelete]);
+      }
+
+      // Insertar nuevos o actualizar los existentes
       for (const campo of campos) {
-        await client.query(
-          `INSERT INTO campos_formulario (id_formulario, nombre, etiqueta, tipo, opciones, requerido, orden)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [req.params.id, campo.nombre, campo.etiqueta, campo.tipo,
-           campo.opciones ? JSON.stringify(campo.opciones) : null,
-           campo.requerido || false, campo.orden || 1]
-        );
+        const campoId = campo.id ? Number(campo.id) : null;
+        if (campoId && existingIds.includes(campoId)) {
+          await client.query(
+            `UPDATE campos_formulario 
+             SET nombre = $1, etiqueta = $2, tipo = $3, opciones = $4, requerido = $5, orden = $6
+             WHERE id = $7`,
+            [
+              campo.nombre,
+              campo.etiqueta,
+              campo.tipo,
+              campo.opciones ? JSON.stringify(campo.opciones) : null,
+              campo.requerido || false,
+              campo.orden || 1,
+              campoId
+            ]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO campos_formulario (id_formulario, nombre, etiqueta, tipo, opciones, requerido, orden)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+              req.params.id,
+              campo.nombre,
+              campo.etiqueta,
+              campo.tipo,
+              campo.opciones ? JSON.stringify(campo.opciones) : null,
+              campo.requerido || false,
+              campo.orden || 1
+            ]
+          );
+        }
       }
     }
     await client.query('COMMIT');

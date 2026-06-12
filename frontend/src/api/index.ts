@@ -1,6 +1,7 @@
 import {
   LoginResponse, Usuario, Expediente, ExpedienteVersion, Tarea,
-  JerarquiaEmpresa, Formulario, Empresa, Area, Proyecto, Disciplina, CampoFormulario
+  JerarquiaEmpresa, Formulario, Empresa, Area, Proyecto, Disciplina, CampoFormulario,
+  Proceso, Etapa, HistorialExpediente
 } from '../entities';
 
 const API_BASE = '';
@@ -61,7 +62,23 @@ export const api = {
     request(`${API_USUARIOS}/reset-password`, { method: 'POST', body: JSON.stringify({ token, password }) }),
 
   // Expedientes
-  getExpedientes: (): Promise<Expediente[]> => request(`${API_EXPEDIENTES}/expedientes`),
+  getExpedientes: (params?: { id_proyecto?: number; id_disciplina?: number; estado?: string; titulo?: string; fecha_desde?: string; fecha_hasta?: string }): Promise<Expediente[]> => {
+    const query = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, val]) => {
+        if (val !== undefined && val !== null && val !== '') {
+          query.set(key, val.toString());
+        }
+      });
+    }
+    const queryString = query.toString();
+    return request(`${API_EXPEDIENTES}/expedientes${queryString ? `?${queryString}` : ''}`);
+  },
+  getStats: (): Promise<{
+    estados: { estado: string; cantidad: string | number }[];
+    areas: { area: string; cantidad: string | number }[];
+    revisores: { revisor: string; cantidad: string | number }[];
+  }> => request(`${API_EXPEDIENTES}/stats`),
   getExpediente: (id: number): Promise<Expediente> => request(`${API_EXPEDIENTES}/expedientes/${id}`),
   getExpedienteVersiones: (id: number): Promise<ExpedienteVersion[]> => request(`${API_EXPEDIENTES}/expedientes/${id}/versiones`),
   getExpedienteUrl: (id: number): Promise<{url: string, nombre_archivo: string}> => request(`${API_EXPEDIENTES}/expedientes/${id}/url`),
@@ -122,6 +139,24 @@ export const api = {
   updateFormulario: (id: number, data: { nombre: string; id_proyecto?: number | null; id_disciplina?: number | null; campos: Partial<CampoFormulario>[] }): Promise<Formulario> =>
     request(`${API_MANTENEDORES}/formularios/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
 
+  // Mantenedores - Procesos
+  getProcesos: (id_area?: number): Promise<Proceso[]> =>
+    request(`${API_MANTENEDORES}/procesos${id_area ? `?id_area=${id_area}` : ''}`),
+  getProceso: (id: number): Promise<Proceso> =>
+    request(`${API_MANTENEDORES}/procesos/${id}`),
+  createProceso: (data: { nombre: string; id_area: number }): Promise<Proceso> =>
+    request(`${API_MANTENEDORES}/procesos`, { method: 'POST', body: JSON.stringify(data) }),
+  updateProceso: (id: number, data: { nombre: string; id_area: number; estado?: string }): Promise<Proceso> =>
+    request(`${API_MANTENEDORES}/procesos/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  // Mantenedores - Etapas
+  getEtapas: (id_proceso: number): Promise<Etapa[]> =>
+    request(`${API_MANTENEDORES}/etapas?id_proceso=${id_proceso}`),
+  createEtapa: (data: { nombre: string; orden: number; id_proceso: number; id_revisor: number | null }): Promise<Etapa> =>
+    request(`${API_MANTENEDORES}/etapas`, { method: 'POST', body: JSON.stringify(data) }),
+  updateEtapa: (id: number, data: { nombre: string; orden: number; id_revisor: number | null; estado?: string }): Promise<Etapa> =>
+    request(`${API_MANTENEDORES}/etapas/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
   // Tareas
   getMisTareas: (): Promise<Tarea[]> => request(`${API_TAREAS}/mis-tareas`),
   getTodasTareas: (params?: { estado?: string }): Promise<Tarea[]> => {
@@ -130,5 +165,11 @@ export const api = {
   },
   getTarea: (id: number): Promise<Tarea> => request(`${API_TAREAS}/tareas/${id}`),
   resolverTarea: (id: number, estado: string, comentario: string): Promise<Tarea> =>
-    request(`${API_TAREAS}/tareas/${id}`, { method: 'PUT', body: JSON.stringify({ estado, comentario }) })
+    request(`${API_TAREAS}/tareas/${id}`, { method: 'PUT', body: JSON.stringify({ estado, comentario }) }),
+
+  // Historial y Archivado
+  getExpedienteHistorial: (id: number): Promise<HistorialExpediente[]> =>
+    request(`${API_EXPEDIENTES}/expedientes/${id}/historial`),
+  archivarExpediente: (id: number): Promise<Expediente> =>
+    request(`${API_EXPEDIENTES}/expedientes/${id}/archivar`, { method: 'PUT' })
 };
