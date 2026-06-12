@@ -167,7 +167,6 @@ app.get('/expedientes', authenticateToken, async (req: Request, res: Response): 
 
     if (id_proyecto) { q += ` AND e.id_proyecto = $${i++}`; vals.push(id_proyecto); }
     if (id_disciplina) { q += ` AND e.id_disciplina = $${i++}`; vals.push(id_disciplina); }
-    
     if (estado) {
       q += ` AND e.estado = $${i++}`; vals.push(estado);
     } else {
@@ -178,7 +177,6 @@ app.get('/expedientes', authenticateToken, async (req: Request, res: Response): 
         q += " AND e.estado != 'ARCHIVADO'";
       }
     }
-    
     if (titulo) { q += ` AND e.titulo ILIKE $${i++}`; vals.push(`%${titulo}%`); }
     if (fecha_desde) { q += ` AND e.created_at >= $${i++}`; vals.push(fecha_desde); }
     if (fecha_hasta) { q += ` AND e.created_at <= $${i++}`; vals.push(`${fecha_hasta} 23:59:59`); }
