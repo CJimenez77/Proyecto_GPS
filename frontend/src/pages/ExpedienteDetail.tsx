@@ -13,11 +13,11 @@ import { api, getCurrentUser } from '../api';
 import type { Expediente, ExpedienteVersion, HistorialExpediente } from '../entities';
 
 const estadoColors: Record<string, "neutral" | "warning" | "success" | "danger"> = {
-  PENDIENTE: 'warning', APROBADO: 'success', RECHAZADO: 'danger'
+  PENDIENTE: 'warning', APROBADO: 'success', RECHAZADO: 'danger', RECHAZADO_DEFINITIVO: 'danger'
 };
 
 const estadoLabel: Record<string, string> = {
-  PENDIENTE: 'Pendiente de Revisión', APROBADO: 'Aprobado', RECHAZADO: 'Rechazado'
+  PENDIENTE: 'Pendiente de Revisión', APROBADO: 'Aprobado', RECHAZADO: 'Rechazado (Requiere Corrección)', RECHAZADO_DEFINITIVO: 'Rechazado Definitivo'
 };
 
 export default function ExpedienteDetail() {
@@ -149,7 +149,7 @@ export default function ExpedienteDetail() {
         <div style={{ flex: 1 }}>
           <Text weight="semibold" size={800} block>{expediente.titulo}</Text>
           <Text size={200} style={{ color: 'gray' }}>
-            {(expediente as any).proyecto_nombre} · {(expediente as any).disciplina_nombre}
+            {(expediente as any).proyecto_nombre} · {(expediente as any).disciplina_nombre} · Proceso: {(expediente as any).proceso_nombre || 'Sin Proceso'}
           </Text>
         </div>
         <Badge appearance="filled" color={estadoColors[expediente.estado] || 'neutral'} size="large">
@@ -178,7 +178,7 @@ export default function ExpedienteDetail() {
               <div style={{ padding: 16, backgroundColor: '#fef0f0', borderRadius: 8, border: '1px solid #f1b0b0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <Text weight="semibold" block style={{ color: '#c50f1f' }}>Documento Rechazado</Text>
-                  <Text size={200} style={{ color: '#c50f1f' }}>Este expediente fue rechazado. Se debe subir una nueva versión corregida.</Text>
+                  <Text size={200} style={{ color: '#c50f1f' }}>Este expediente fue rechazado y requiere correcciones. Se debe subir una nueva versión corregida.</Text>
                 </div>
                 {canSubirVersion && (
                   <Button icon={<Add24Regular />} appearance="primary" onClick={() => setIsDrawerOpen(true)}
@@ -186,6 +186,14 @@ export default function ExpedienteDetail() {
                     Subir Corrección
                   </Button>
                 )}
+              </div>
+            )}
+
+            {/* Alerta si está rechazado definitivamente */}
+            {expediente.estado === 'RECHAZADO_DEFINITIVO' && (
+              <div style={{ padding: 16, backgroundColor: '#fef0f0', borderRadius: 8, border: '1px solid #f1b0b0', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <Text weight="semibold" block style={{ color: '#c50f1f' }}>Rechazado Definitivamente</Text>
+                <Text size={200} style={{ color: '#c50f1f' }}>Este expediente ha sido rechazado de manera definitiva. No se admiten correcciones ni nuevas versiones.</Text>
               </div>
             )}
 

@@ -55,7 +55,7 @@ export interface Expediente {
   subido_por: number;
   archivo_key: string;
   nombre_archivo: string;
-  estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
+  estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO' | 'RECHAZADO_DEFINITIVO';
   version: number;
   id_expediente_padre: number | null;
   created_at: string;

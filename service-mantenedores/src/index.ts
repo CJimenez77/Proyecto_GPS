@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import pkg from 'pg';
+import nodemailer from 'nodemailer';
 const { Pool } = pkg;
 
 dotenv.config();
@@ -21,6 +22,17 @@ const pool = new Pool({
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || 'postgres',
   ssl: false,
+});
+
+// Configuración del transportador SMTP para correos reales
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: process.env.SMTP_SECURE === 'true', // true para puerto 465, false para 587
+  auth: {
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+  },
 });
 
 interface User { id: number; username: string; rol: string; id_area: number | null; }
@@ -260,12 +272,97 @@ app.get('/procesos/:id', authenticateToken, requireAdmin, async (req: Request, r
 });
 
 app.post('/procesos', authenticateToken, requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  const client = await pool.connect();
   try {
-    const { nombre, id_area } = req.body;
-    if (!nombre || !id_area) { res.status(400).json({ error: 'nombre e id_area requeridos' }); return; }
-    const r = await pool.query('INSERT INTO procesos (nombre, id_area) VALUES ($1, $2) RETURNING *', [nombre, id_area]);
-    res.status(201).json(r.rows[0]);
-  } catch (e) { res.status(500).json({ error: 'Error interno' }); }
+    const { nombre, id_area, etapas } = req.body;
+    if (!nombre || !id_area) {
+      res.status(400).json({ error: 'nombre e id_area requeridos' });
+      return;
+    }
+    if (!Array.isArray(etapas) || etapas.length === 0) {
+      res.status(400).json({ error: 'Debe proporcionar al menos una etapa para crear el proceso.' });
+      return;
+    }
+
+    await client.query('BEGIN');
+
+    // 1. Insertar el proceso
+    const procRes = await client.query(
+      'INSERT INTO procesos (nombre, id_area) VALUES ($1, $2) RETURNING *',
+      [nombre, id_area]
+    );
+    const proceso = procRes.rows[0];
+
+    // 2. Insertar cada etapa
+    for (const et of etapas) {
+      if (!et.nombre || !et.orden || !et.id_revisor) {
+        throw new Error('Todas las etapas deben tener nombre, orden y revisor asignado.');
+      }
+      await client.query(
+        'INSERT INTO etapas (nombre, orden, id_proceso, id_revisor) VALUES ($1, $2, $3, $4)',
+        [et.nombre, et.orden, proceso.id, et.id_revisor]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    // 3. Notificar por correo a todos los revisores de esa área
+    try {
+      const revQ = await pool.query(
+        "SELECT nombre, email FROM usuarios WHERE rol = 'revisor' AND id_area = $1 AND estado = 'activo'",
+        [id_area]
+      );
+
+      const areaQ = await pool.query("SELECT nombre FROM areas WHERE id = $1", [id_area]);
+      const areaNombre = areaQ.rows.length ? areaQ.rows[0].nombre : `Área #${id_area}`;
+
+      if (revQ.rows.length > 0) {
+        const emails = revQ.rows.map(r => r.email).filter(Boolean);
+        if (emails.length > 0 && process.env.SMTP_USER && process.env.SMTP_PASS) {
+          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+          
+          await transporter.sendMail({
+            from: process.env.SMTP_FROM || `"GPS Seguridad" <${process.env.SMTP_USER}>`,
+            to: emails.join(', '),
+            subject: '📋 Nuevo proceso de aprobación creado - GPS',
+            text: `Hola,\n\nSe ha creado un nuevo proceso de aprobación en tu área (${areaNombre}) en el Sistema de Gestión Documental de GPS.\n\nProceso: ${nombre}\nÁrea: ${areaNombre}\n\nLas etapas configuradas para este proceso requieren de tu revisión según el flujo secuencial establecido.\n\nPor favor, ingresa al sistema en:\n${frontendUrl}`,
+            html: `
+              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e6ed; border-radius: 8px;">
+                <h2 style="color: #0078d4; text-align: center;">Nuevo Proceso Creado</h2>
+                <p>Hola,</p>
+                <p>Se ha creado un nuevo proceso de aprobación en tu área (<strong>${areaNombre}</strong>) en el Sistema de Gestión Documental de GPS.</p>
+                <div style="background-color: #f5f7fa; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #0078d4;">
+                  <p style="margin: 0; font-size: 16px;"><strong>Proceso:</strong> ${nombre}</p>
+                  <p style="margin: 5px 0 0 0; font-size: 14px; color: #555;"><strong>Área:</strong> ${areaNombre}</p>
+                </div>
+                <p>Las etapas configuradas para este proceso requieren de tu revisión según el flujo secuencial establecido.</p>
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${frontendUrl}" style="background-color: #0078d4; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Ingresar al Sistema</a>
+                </div>
+                <hr style="border: none; border-top: 1px solid #e0e6ed; margin: 20px 0;" />
+                <p style="font-size: 12px; color: gray; text-align: center;">Este es un correo automático. Por favor no respondas a este mensaje.</p>
+              </div>
+            `,
+          });
+          console.log(`[Email] Notificación de nuevo proceso enviada a revisores: ${emails.join(', ')}`);
+        } else {
+          console.log(`[Email] Saltando envío de correo de proceso. Emails: ${emails.length}, SMTP_USER: ${!!process.env.SMTP_USER}, SMTP_PASS: ${!!process.env.SMTP_PASS}`);
+        }
+      } else {
+        console.log(`[Email] No se encontraron revisores activos asignados al área ${id_area} para notificar.`);
+      }
+    } catch (mailError) {
+      console.error('[Email] Error al enviar correo de notificación de proceso:', mailError);
+    }
+
+    res.status(201).json(proceso);
+  } catch (e: any) {
+    await client.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ error: e.message || 'Error interno' });
+  } finally {
+    client.release();
+  }
 });
 
 app.put('/procesos/:id', authenticateToken, requireAdmin, async (req: Request, res: Response): Promise<void> => {
@@ -569,5 +666,7 @@ app.put('/formularios/:id', authenticateToken, requireAdmin, async (req: Request
   } finally { client.release(); }
 });
 
-app.listen(PORT, () => console.log(`service-mantenedores corriendo en puerto ${PORT}`));
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => console.log(`service-mantenedores corriendo en puerto ${PORT}`));
+}
 export default app;

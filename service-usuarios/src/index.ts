@@ -254,6 +254,7 @@ app.post('/forgot-password', async (req: Request, res: Response): Promise<void> 
           from: process.env.SMTP_FROM || `"GPS Seguridad" <${process.env.SMTP_USER}>`,
           to: user.email,
           subject: '🔑 Restablecer contraseña - GPS',
+          text: `Hola ${user.nombre},\n\nRecibimos una solicitud para restablecer tu contraseña en el Sistema de Gestión Documental de GPS.\n\nPara continuar y establecer una nueva contraseña, por favor haz clic en el siguiente enlace o cópialo en tu navegador:\n${resetUrl}\n\nSi no solicitaste este cambio, puedes ignorar este correo de forma segura. Tu contraseña actual seguirá funcionando.`,
           html: `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e6ed; border-radius: 8px;">
               <h2 style="color: #0078d4; text-align: center;">Restablecimiento de Contraseña</h2>
@@ -484,9 +485,10 @@ app.put('/usuarios/:id/estado', authenticateToken, requireAdmin, async (req: Req
   }
 });
 
-app.listen(PORT, async () => {
-  await initDb();
-  console.log(`service-usuarios corriendo en puerto ${PORT}`);
-});
-
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, async () => {
+    await initDb();
+    console.log(`service-usuarios corriendo en puerto ${PORT}`);
+  });
+}
 export default app;

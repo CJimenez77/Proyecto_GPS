@@ -96,6 +96,20 @@ export default function Tareas() {
     finally { setIsSubmitting(false); }
   };
 
+  const handleResolveRechazo = async (accion: 'definitivo' | 'correccion') => {
+    if (!activeTarea) return;
+    if (!comentario.trim()) { alert('Debe ingresar un comentario obligatorio.'); return; }
+    setIsSubmitting(true);
+    try {
+      await api.resolverTarea(activeTarea.id, 'RECHAZADA', comentario, accion);
+      setActiveTarea(null);
+      setActiveExpediente(null);
+      setComentario('');
+      loadTareas();
+    } catch (e: any) { alert('Error: ' + e.message); }
+    finally { setIsSubmitting(false); }
+  };
+
   const filtered = tareas.filter(t =>
     (t.expediente_titulo || '').toLowerCase().includes(search.toLowerCase()) ||
     (t.proyecto_nombre || '').toLowerCase().includes(search.toLowerCase())
@@ -196,6 +210,7 @@ export default function Tareas() {
                   <div>
                     <Text weight="semibold" size={400} block>{activeTarea.expediente_titulo}</Text>
                     <Text size={200} style={{ color: '#555' }} block>Proyecto: {activeTarea.proyecto_nombre}</Text>
+                    <Text size={200} style={{ color: '#555' }} block>Proceso: {(activeTarea as any).proceso_nombre || 'Sin Proceso'}</Text>
                     <Text size={200} style={{ color: '#555' }} block>Etapa: {activeTarea.etapa_nombre}</Text>
                     {isAdmin && <Text size={200} style={{ color: '#555' }} block>Asignado a: {activeTarea.asignado_a_nombre}</Text>}
                   </div>
@@ -274,12 +289,20 @@ export default function Tareas() {
         <DrawerFooter>
           <Button appearance="secondary" onClick={() => { setActiveTarea(null); setActiveExpediente(null); }} disabled={isSubmitting}>Cancelar</Button>
           <Button
-            style={{ backgroundColor: '#d13438', color: 'white' }}
+            style={{ backgroundColor: '#a80000', color: 'white' }}
             icon={<Dismiss24Regular />}
-            onClick={() => handleResolve('RECHAZADA')}
+            onClick={() => handleResolveRechazo('definitivo')}
             disabled={isSubmitting || !activeTarea}
           >
-            {isSubmitting ? <Spinner size="extra-tiny" /> : 'Rechazar'}
+            {isSubmitting ? <Spinner size="extra-tiny" /> : 'Rechazar Definitivamente'}
+          </Button>
+          <Button
+            style={{ backgroundColor: '#d13438', color: 'white' }}
+            icon={<DocumentArrowRight24Regular />}
+            onClick={() => handleResolveRechazo('correccion')}
+            disabled={isSubmitting || !activeTarea}
+          >
+            {isSubmitting ? <Spinner size="extra-tiny" /> : 'Rechazar y Solicitar Corrección'}
           </Button>
           <Button
             style={{ backgroundColor: '#107c10', color: 'white' }}

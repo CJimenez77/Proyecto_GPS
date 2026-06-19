@@ -6,11 +6,11 @@ import { api, getCurrentUser } from '../api';
 import type { Expediente, JerarquiaEmpresa, Formulario } from '../entities';
 
 const estadoColors: Record<Expediente['estado'], "neutral" | "warning" | "informative" | "success" | "danger"> = {
-  PENDIENTE: 'warning', APROBADO: 'success', RECHAZADO: 'danger'
+  PENDIENTE: 'warning', APROBADO: 'success', RECHAZADO: 'danger', RECHAZADO_DEFINITIVO: 'danger', ARCHIVADO: 'neutral'
 };
 
 const estadoLabel: Record<string, string> = {
-  PENDIENTE: 'Pendiente', APROBADO: 'Aprobado', RECHAZADO: 'Rechazado'
+  PENDIENTE: 'Pendiente', APROBADO: 'Aprobado', RECHAZADO: 'Rechazado (Requiere Corrección)', RECHAZADO_DEFINITIVO: 'Rechazado Definitivo', ARCHIVADO: 'Archivado'
 };
 
 const getNombreArchivoDisplay = (nombre: string) => {
@@ -56,10 +56,37 @@ export default function Expedientes() {
   // Dynamic form
   const [formulario, setFormulario] = useState<Formulario | null>(null);
   const [respuestas, setRespuestas] = useState<Record<number, string>>({});
-  const [loadingForm, setLoadingForm] = useState(false);
+   const [loadingForm, setLoadingForm] = useState(false);
   const [formularioBuscado, setFormularioBuscado] = useState(false);
   const [mostrarSelectorForm, setMostrarSelectorForm] = useState(false);
   const [selFormManual, setSelFormManual] = useState(0);
+
+  // Procesos states
+  const [procesosArea, setProcesosArea] = useState<any[]>([]);
+  const [selProceso, setSelProceso] = useState(0);
+  const [loadingProcesos, setLoadingProcesos] = useState(false);
+
+  // Cargar procesos al cambiar el área seleccionada
+  useEffect(() => {
+    if (selArea > 0) {
+      setLoadingProcesos(true);
+      api.getProcesos(selArea)
+        .then(procs => {
+          const activeProcs = procs.filter(p => p.estado === 'activo');
+          setProcesosArea(activeProcs);
+          setSelProceso(0);
+        })
+        .catch(err => {
+          console.error(err);
+          setProcesosArea([]);
+          setSelProceso(0);
+        })
+        .finally(() => setLoadingProcesos(false));
+    } else {
+      setProcesosArea([]);
+      setSelProceso(0);
+    }
+  }, [selArea]);
 
   useEffect(() => { loadData(); }, []);
 
@@ -207,6 +234,10 @@ export default function Expedientes() {
       alert('Completar todos los campos obligatorios y adjuntar al menos un archivo');
       return;
     }
+    if (!selProceso) {
+      alert('Debe seleccionar obligatoriamente a qué proceso pertenecerá el expediente.');
+      return;
+    }
     if (formulario) {
       for (const campo of formulario.campos) {
         if (campo.requerido && !respuestas[campo.id]) {
@@ -221,6 +252,7 @@ export default function Expedientes() {
       formData.append('titulo', titulo);
       formData.append('id_proyecto', selProyecto.toString());
       formData.append('id_disciplina', selDisciplina.toString());
+      formData.append('id_proceso', selProceso.toString());
       
       archivos.forEach(file => {
         formData.append('archivo', file);
@@ -247,6 +279,7 @@ export default function Expedientes() {
     setTitulo(''); setSelProyecto(0); setSelDisciplina(0);
     setArchivos([]); setRespuestas({}); setFormulario(null);
     setFormularioBuscado(false); setMostrarSelectorForm(false); setSelFormManual(0);
+    setSelProceso(0); setProcesosArea([]);
   };
 
   const currentEmpresa = jerarquia.find(e => e.id === selEmpresa);
@@ -390,6 +423,45 @@ export default function Expedientes() {
                 </select>
               </Field>
             </div>
+
+            {/* Proceso (Obligatorio) */}
+            {selArea > 0 && (
+              <div>
+                {loadingProcesos ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+                    <Spinner size="tiny" />
+                    <Text size={200} style={{ color: 'gray' }}>Cargando procesos de aprobación...</Text>
+                  </div>
+                ) : procesosArea.length === 0 ? (
+                  <div style={{ 
+                    padding: '12px 16px', 
+                    backgroundColor: '#fff4f4', 
+                    color: '#d13438', 
+                    borderRadius: 8, 
+                    border: '1px solid #fde7e9',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    lineHeight: '1.4'
+                  }}>
+                    ⚠️ En el área seleccionada no existen procesos activos, por lo que no se pueden crear expedientes.
+                  </div>
+                ) : (
+                  <Field label="Proceso de Aprobación" required>
+                    <select 
+                      style={selectStyle} 
+                      value={selProceso} 
+                      onChange={e => setSelProceso(Number(e.target.value))}
+                    >
+                      <option value={0}>Seleccionar proceso...</option>
+                      {procesosArea.map(p => (
+                        <option key={p.id} value={p.id}>{p.nombre}</option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+              </div>
+            )}
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Field label="Proyecto" required>
                 <select style={selectStyle} value={selProyecto} onChange={e => { setSelProyecto(Number(e.target.value)); setSelDisciplina(0); }}>
@@ -533,7 +605,11 @@ export default function Expedientes() {
         </DrawerBody>
         <DrawerFooter>
           <Button appearance="secondary" onClick={() => { setIsDrawerOpen(false); resetForm(); }} disabled={isSubmitting}>Cancelar</Button>
-          <Button appearance="primary" onClick={handleCreate} disabled={isSubmitting}>
+          <Button 
+            appearance="primary" 
+            onClick={handleCreate} 
+            disabled={isSubmitting || (selArea > 0 && !loadingProcesos && procesosArea.length === 0)}
+          >
             {isSubmitting ? <Spinner size="extra-tiny" /> : 'Subir Expediente'}
           </Button>
         </DrawerFooter>

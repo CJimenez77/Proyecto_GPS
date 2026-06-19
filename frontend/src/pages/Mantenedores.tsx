@@ -68,6 +68,8 @@ export default function Mantenedores() {
   const [procesoForm, setProcesoForm] = useState({ nombre: '', id_area: 0 });
   const [etapaForm, setEtapaForm] = useState({ nombre: '', orden: 1, id_revisor: 0, id_proceso: 0 });
 
+  const [procesoEtapasForm, setProcesoEtapasForm] = useState<{ nombre: string; id_revisor: number }[]>([]);
+
   const [editProcesoId, setEditProcesoId] = useState<number | null>(null);
   const [editEtapaId, setEditEtapaId] = useState<number | null>(null);
 
@@ -118,6 +120,7 @@ export default function Mantenedores() {
     if (tab === 'procesos') {
       setEditProcesoId(null);
       setProcesoForm({ nombre: '', id_area: 0 });
+      setProcesoEtapasForm([]);
       setProcessDrawerOpen(true);
       return;
     }
@@ -235,12 +238,35 @@ export default function Mantenedores() {
 
   const handleSaveProceso = async () => {
     if (!procesoForm.nombre || !procesoForm.id_area) { alert('Nombre y área requeridos'); return; }
+    
+    // Only enforce stages on creation
+    if (!editProcesoId) {
+      if (procesoEtapasForm.length === 0) {
+        alert('Debe agregar al menos una etapa para crear el proceso.');
+        return;
+      }
+      for (const et of procesoEtapasForm) {
+        if (!et.nombre.trim() || !et.id_revisor) {
+          alert('Todas las etapas deben tener un nombre y un revisor asignado.');
+          return;
+        }
+      }
+    }
+
     try {
       if (editProcesoId) {
         const updated = await api.updateProceso(editProcesoId, procesoForm);
         setProcesos(procesos.map(p => p.id === editProcesoId ? updated : p));
       } else {
-        const created = await api.createProceso(procesoForm);
+        const created = await api.createProceso({
+          nombre: procesoForm.nombre,
+          id_area: procesoForm.id_area,
+          etapas: procesoEtapasForm.map((et, idx) => ({
+            nombre: et.nombre,
+            orden: idx + 1,
+            id_revisor: et.id_revisor
+          }))
+        });
         setProcesos([...procesos, created]);
       }
       setProcessDrawerOpen(false);
@@ -633,7 +659,7 @@ export default function Mantenedores() {
       </Drawer>
 
       {/* DRAWER NUEVO/EDITAR PROCESO */}
-      <Drawer open={processDrawerOpen} onOpenChange={(_, o) => setProcessDrawerOpen(o.open)} position="end" size="small">
+      <Drawer open={processDrawerOpen} onOpenChange={(_, o) => setProcessDrawerOpen(o.open)} position="end" size="medium">
         <DrawerHeader>
           <Text weight="semibold" size={500}>
             {editProcesoId ? 'Editar Proceso' : 'Nuevo Proceso'}
@@ -645,11 +671,77 @@ export default function Mantenedores() {
               <Input value={procesoForm.nombre} onChange={(_, d) => setProcesoForm({ ...procesoForm, nombre: d.value })} placeholder="Ej: Proceso de Aprobación Civil" />
             </Field>
             <Field label="Área de Aprobación" required>
-              <Select value={procesoForm.id_area} onChange={e => setProcesoForm({ ...procesoForm, id_area: Number(e.target.value) })}>
+              <Select 
+                value={procesoForm.id_area} 
+                onChange={e => {
+                  setProcesoForm({ ...procesoForm, id_area: Number(e.target.value) });
+                  setProcesoEtapasForm([]);
+                }}
+              >
                 <option value={0}>Seleccionar área...</option>
                 {areas.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
               </Select>
             </Field>
+
+            {/* Listado de etapas para creación obligatoria */}
+            {!editProcesoId && (
+              <div style={{ borderTop: '1px solid #eee', paddingTop: 16, marginTop: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <Text weight="semibold">Etapas del Proceso</Text>
+                  <Button 
+                    size="small" 
+                    icon={<Add24Regular />} 
+                    disabled={!procesoForm.id_area}
+                    onClick={() => setProcesoEtapasForm([...procesoEtapasForm, { nombre: '', id_revisor: 0 }])}
+                  >
+                    Agregar Etapa
+                  </Button>
+                </div>
+                
+                {!procesoForm.id_area && (
+                  <Text size={200} style={{ color: 'gray', fontStyle: 'italic' }}>
+                    Seleccione un área para poder agregar etapas.
+                  </Text>
+                )}
+
+                {procesoForm.id_area && procesoEtapasForm.length === 0 && (
+                  <Text size={200} style={{ color: '#d13438', fontStyle: 'italic' }}>
+                    Debe agregar al menos una etapa para este proceso.
+                  </Text>
+                )}
+
+                {procesoForm.id_area && procesoEtapasForm.map((et, idx) => (
+                  <div key={idx} style={{ border: '1px solid #e0e0e0', borderRadius: 8, padding: 12, marginBottom: 12, backgroundColor: '#fafafa' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <Text weight="semibold" size={200}>Etapa #{idx + 1}</Text>
+                      <Button size="small" appearance="subtle" icon={<Delete24Regular />} onClick={() => setProcesoEtapasForm(procesoEtapasForm.filter((_, i) => i !== idx))} />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <Field label="Nombre de Etapa" required>
+                        <Input 
+                          size="small" 
+                          value={et.nombre} 
+                          onChange={(_, d) => setProcesoEtapasForm(procesoEtapasForm.map((item, i) => i === idx ? { ...item, nombre: d.value } : item))} 
+                          placeholder="Ej: Revisión Técnica" 
+                        />
+                      </Field>
+                      <Field label="Revisor Asignado" required>
+                        <select 
+                          style={{ ...sel, padding: '4px 8px' }} 
+                          value={et.id_revisor} 
+                          onChange={e => setProcesoEtapasForm(procesoEtapasForm.map((item, i) => i === idx ? { ...item, id_revisor: Number(e.target.value) } : item))}
+                        >
+                          <option value={0}>Seleccionar...</option>
+                          {revisores.filter(r => r.id_area === procesoForm.id_area).map(r => (
+                            <option key={r.id} value={r.id}>{r.nombre}</option>
+                          ))}
+                        </select>
+                      </Field>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </DrawerBody>
         <DrawerFooter>

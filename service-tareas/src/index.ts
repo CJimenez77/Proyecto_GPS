@@ -60,7 +60,8 @@ const TAREA_SELECT = `
          u.nombre AS asignado_a_nombre,
          p.nombre AS proyecto_nombre, d.nombre AS disciplina_nombre,
          a.id AS id_area,
-         et.nombre AS etapa_nombre
+         et.nombre AS etapa_nombre,
+         pr.nombre AS proceso_nombre
   FROM tareas t
   JOIN expedientes e ON e.id = t.id_expediente
   JOIN usuarios u ON u.id = t.id_usuario_asignado
@@ -68,6 +69,7 @@ const TAREA_SELECT = `
   JOIN disciplinas d ON d.id = e.id_disciplina
   JOIN areas a ON a.id = p.id_area
   LEFT JOIN etapas et ON et.id = t.id_etapa
+  LEFT JOIN procesos pr ON pr.id = e.id_proceso
 `;
 
 // ─── Health ───────────────────────────────────────────────────────────────────
@@ -121,6 +123,7 @@ app.post('/tareas', async (req: Request, res: Response): Promise<void> => {
             from: process.env.SMTP_FROM || `"GPS Seguridad" <${process.env.SMTP_USER}>`,
             to: revisor_email,
             subject: '📋 Nueva tarea de revisión asignada - GPS',
+            text: `Hola ${revisor_nombre},\n\nSe te ha asignado una nueva tarea de revisión en el Sistema de Gestión Documental de GPS.\n\nExpediente: ${expediente_titulo}\nEtapa: ${etapa_nombre || 'Inicial'}\n\nPor favor, ingresa al sistema para revisar el expediente y resolver la aprobación o rechazo en:\n${taskUrl}`,
             html: `
               <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e6ed; border-radius: 8px;">
                 <h2 style="color: #0078d4; text-align: center;">Nueva Tarea de Revisión</h2>
@@ -215,7 +218,7 @@ app.put('/tareas/:id', authenticateToken, async (req: Request, res: Response): P
   const client = await pool.connect();
   try {
     const user: User = (req as any).user;
-    const { estado, comentario } = req.body;
+    const { estado, comentario, accion_rechazo } = req.body;
 
     // Obtener tarea actual
     const tareaQ = await client.query(`${TAREA_SELECT} WHERE t.id = $1`, [req.params.id]);
@@ -239,48 +242,157 @@ app.put('/tareas/:id', authenticateToken, async (req: Request, res: Response): P
 
     await client.query('BEGIN');
 
-    // Actualizar tarea
-    await client.query(
-      'UPDATE tareas SET estado=$1, comentario=$2, updated_at=CURRENT_TIMESTAMP WHERE id=$3',
-      [estado, comentario || null, req.params.id]
-    );
-
     // Propagar cambio al expediente
     if (estado === 'APROBADA') {
+      // 1. Obtener detalles de la etapa actual
+      const etapaQ = await client.query(
+        'SELECT orden, id_proceso, nombre FROM etapas WHERE id = $1',
+        [tarea.id_etapa]
+      );
+      
+      let nextEtapa = null;
+      if (etapaQ.rows.length > 0) {
+        const currentEtapa = etapaQ.rows[0];
+        // 2. Buscar la siguiente etapa activa del proceso
+        const nextEtapaQ = await client.query(
+          'SELECT id, nombre, id_revisor FROM etapas WHERE id_proceso = $1 AND orden > $2 AND estado = \'activo\' ORDER BY orden LIMIT 1',
+          [currentEtapa.id_proceso, currentEtapa.orden]
+        );
+        if (nextEtapaQ.rows.length > 0) {
+          nextEtapa = nextEtapaQ.rows[0];
+        }
+      }
+
+      // Actualizar tarea actual
       await client.query(
-        "UPDATE expedientes SET estado='APROBADO', updated_at=CURRENT_TIMESTAMP WHERE id=$1",
-        [tarea.id_expediente]
+        'UPDATE tareas SET estado=$1, comentario=$2, updated_at=CURRENT_TIMESTAMP WHERE id=$3',
+        [estado, comentario || null, req.params.id]
       );
 
-      // Registrar en historial
-      await client.query(
-        `INSERT INTO public.historial_expedientes (id_expediente, evento, descripcion, id_usuario)
-         VALUES ($1, 'Cambio de Estado', $2, $3)`,
-        [tarea.id_expediente, `Estado del expediente cambiado a "APROBADO" por resolución de tarea (Comentario: "${comentario}")`, user.id]
-      );
+      if (nextEtapa) {
+        // Aún quedan etapas. Registrar avance en historial y NO marcar expediente como aprobado.
+        const currentEtapaName = etapaQ.rows[0].nombre;
+        const nextEtapaName = nextEtapa.nombre;
+        const nextRevisorId = nextEtapa.id_revisor;
 
-      // Cancelar/cerrar otras tareas del mismo expediente que sigan abiertas
-      await client.query(
-        "UPDATE tareas SET estado='APROBADA', comentario='Aprobado por otro revisor', updated_at=CURRENT_TIMESTAMP WHERE id_expediente=$1 AND id != $2 AND estado IN ('ABIERTA', 'EN_REVISION')",
-        [tarea.id_expediente, req.params.id]
-      );
+        // Obtener nombre del siguiente revisor
+        const revQ = await client.query('SELECT nombre, email FROM usuarios WHERE id = $1', [nextRevisorId]);
+        const nextRevisorName = revQ.rows.length ? revQ.rows[0].nombre : 'Sin asignación';
+        const nextRevisorEmail = revQ.rows.length ? revQ.rows[0].email : null;
+
+        const desc = `Etapa "${currentEtapaName}" aprobada por "${user.username}". Expediente avanza a etapa "${nextEtapaName}" asignada a "${nextRevisorName}". (Comentario: "${comentario}")`;
+        await client.query(
+          `INSERT INTO public.historial_expedientes (id_expediente, evento, descripcion, id_usuario)
+           VALUES ($1, 'Aprobación de Etapa', $2, $3)`,
+          [tarea.id_expediente, desc, user.id]
+        );
+
+        // Cancelar otras tareas del mismo expediente y etapa (si hubiera)
+        await client.query(
+          "UPDATE tareas SET estado='APROBADA', comentario='Aprobado por avance de etapa', updated_at=CURRENT_TIMESTAMP WHERE id_expediente=$1 AND id_etapa=$2 AND id != $3 AND estado IN ('ABIERTA', 'EN_REVISION')",
+          [tarea.id_expediente, tarea.id_etapa, req.params.id]
+        );
+
+        // Crear tarea para el siguiente revisor
+        await client.query(
+          `INSERT INTO tareas (id_expediente, id_usuario_asignado, id_etapa, estado)
+           VALUES ($1, $2, $3, 'ABIERTA')`,
+          [tarea.id_expediente, nextRevisorId, nextEtapa.id]
+        );
+
+        // Notificar por correo al siguiente revisor
+        if (nextRevisorEmail && process.env.SMTP_USER && process.env.SMTP_PASS) {
+          try {
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+            const taskUrl = `${frontendUrl}/tareas`;
+
+            await transporter.sendMail({
+              from: process.env.SMTP_FROM || `"GPS Seguridad" <${process.env.SMTP_USER}>`,
+              to: nextRevisorEmail,
+              subject: '📋 Nueva tarea de revisión asignada - GPS',
+              text: `Hola ${nextRevisorName},\n\nSe te ha asignado una nueva tarea de revisión en el flujo de aprobación secuencial de GPS.\n\nExpediente: ${tarea.expediente_titulo}\nSiguiente Etapa: ${nextEtapaName}\n\nPor favor, ingresa al sistema para revisar el expediente y resolver la aprobación o rechazo en:\n${taskUrl}`,
+              html: `
+                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e6ed; border-radius: 8px;">
+                  <h2 style="color: #0078d4; text-align: center;">Nueva Tarea de Revisión</h2>
+                  <p>Hola <strong>${nextRevisorName}</strong>,</p>
+                  <p>Se te ha asignado una nueva tarea de revisión en el flujo de aprobación secuencial de GPS.</p>
+                  <div style="background-color: #f5f7fa; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #0078d4;">
+                    <p style="margin: 0; font-size: 16px;"><strong>Expediente:</strong> ${tarea.expediente_titulo}</p>
+                    <p style="margin: 5px 0 0 0; font-size: 14px; color: #555;"><strong>Siguiente Etapa:</strong> ${nextEtapaName}</p>
+                  </div>
+                  <p>Por favor, ingresa al sistema para revisar el expediente y resolver la aprobación o rechazo del mismo.</p>
+                  <div style="text-align: center; margin: 30px 0;">
+                    <a href="${taskUrl}" style="background-color: #0078d4; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Ver mis Tareas</a>
+                  </div>
+                  <hr style="border: none; border-top: 1px solid #e0e6ed; margin: 20px 0;" />
+                  <p style="font-size: 12px; color: gray; text-align: center;">Este es un correo automático. Por favor no respondas a este mensaje.</p>
+                </div>
+              `,
+            });
+            console.log(`[Email] Notificación de siguiente etapa enviada a ${nextRevisorEmail} por expediente ${tarea.id_expediente}`);
+          } catch (mailErr) {
+            console.error('[Email] Error al enviar correo al siguiente revisor:', mailErr);
+          }
+        } else {
+          console.log(`[Email] Saltando envío a siguiente revisor. nextRevisorEmail: ${nextRevisorEmail}, SMTP_USER: ${!!process.env.SMTP_USER}, SMTP_PASS: ${!!process.env.SMTP_PASS}`);
+        }
+      } else {
+        // No hay más etapas. Aprobación final del expediente.
+        const currentEtapaName = etapaQ.rows.length ? etapaQ.rows[0].nombre : 'Final';
+        
+        await client.query(
+          "UPDATE expedientes SET estado='APROBADO', updated_at=CURRENT_TIMESTAMP WHERE id=$1",
+          [tarea.id_expediente]
+        );
+
+        // Registrar en historial de aprobación final
+        await client.query(
+          `INSERT INTO public.historial_expedientes (id_expediente, evento, descripcion, id_usuario)
+           VALUES ($1, 'Cambio de Estado', $2, $3)`,
+          [tarea.id_expediente, `Estado del expediente cambiado a "APROBADO" tras la aprobación de la última etapa ("${currentEtapaName}") por "${user.username}". (Comentario: "${comentario}")`, user.id]
+        );
+
+        // Cancelar otras tareas abiertas
+        await client.query(
+          "UPDATE tareas SET estado='APROBADA', comentario='Aprobado por resolución final', updated_at=CURRENT_TIMESTAMP WHERE id_expediente=$1 AND id != $2 AND estado IN ('ABIERTA', 'EN_REVISION')",
+          [tarea.id_expediente, req.params.id]
+        );
+      }
     } else if (estado === 'RECHAZADA') {
+      const isDefinitivo = accion_rechazo === 'definitivo';
+      const nuevoEstadoExpediente = isDefinitivo ? 'RECHAZADO_DEFINITIVO' : 'RECHAZADO';
+      const tipoRechazoDesc = isDefinitivo ? 'rechazado definitivamente' : 'rechazado con solicitud de corrección';
+      
+      // Actualizar tarea actual
       await client.query(
-        "UPDATE expedientes SET estado='RECHAZADO', updated_at=CURRENT_TIMESTAMP WHERE id=$1",
-        [tarea.id_expediente]
+        'UPDATE tareas SET estado=$1, comentario=$2, updated_at=CURRENT_TIMESTAMP WHERE id=$3',
+        [estado, comentario || null, req.params.id]
+      );
+
+      // Actualizar expediente
+      await client.query(
+        "UPDATE expedientes SET estado=$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2",
+        [nuevoEstadoExpediente, tarea.id_expediente]
       );
 
       // Registrar en historial
+      const etapaNombre = tarea.etapa_nombre || 'N/A';
       await client.query(
         `INSERT INTO public.historial_expedientes (id_expediente, evento, descripcion, id_usuario)
          VALUES ($1, 'Cambio de Estado', $2, $3)`,
-        [tarea.id_expediente, `Estado del expediente cambiado a "RECHAZADO" por resolución de tarea (Comentario: "${comentario}")`, user.id]
+        [tarea.id_expediente, `Estado del expediente cambiado a "${nuevoEstadoExpediente}" (${tipoRechazoDesc}) por "${user.username}" en la etapa "${etapaNombre}". (Comentario: "${comentario}")`, user.id]
       );
 
       // Cancelar/cerrar otras tareas del mismo expediente que sigan abiertas
       await client.query(
-        "UPDATE tareas SET estado='RECHAZADA', comentario='Rechazado por otro revisor', updated_at=CURRENT_TIMESTAMP WHERE id_expediente=$1 AND id != $2 AND estado IN ('ABIERTA', 'EN_REVISION')",
+        "UPDATE tareas SET estado='RECHAZADA', comentario='Rechazado por otro revisor / resolución de expediente', updated_at=CURRENT_TIMESTAMP WHERE id_expediente=$1 AND id != $2 AND estado IN ('ABIERTA', 'EN_REVISION')",
         [tarea.id_expediente, req.params.id]
+      );
+    } else {
+      // Para estados ABIERTA, EN_REVISION sin propagación a expediente
+      await client.query(
+        'UPDATE tareas SET estado=$1, comentario=$2, updated_at=CURRENT_TIMESTAMP WHERE id=$3',
+        [estado, comentario || null, req.params.id]
       );
     }
 
@@ -294,5 +406,7 @@ app.put('/tareas/:id', authenticateToken, async (req: Request, res: Response): P
   } finally { client.release(); }
 });
 
-app.listen(PORT, () => console.log(`service-tareas corriendo en puerto ${PORT}`));
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => console.log(`service-tareas corriendo en puerto ${PORT}`));
+}
 export default app;

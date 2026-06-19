@@ -48,6 +48,13 @@ const pool = new Pool({
 
 const initDB = async () => {
   try {
+    // Agregar columna id_proceso si no existe
+    await pool.query(`
+      ALTER TABLE public.expedientes 
+      ADD COLUMN IF NOT EXISTS id_proceso integer REFERENCES public.procesos(id);
+    `);
+    console.log('[DB] Columna id_proceso en tabla expedientes verificada/creada');
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS public.historial_expedientes (
         id SERIAL PRIMARY KEY,
@@ -62,7 +69,7 @@ const initDB = async () => {
     `);
     console.log('[DB] Tabla historial_expedientes verificada/creada');
   } catch (err) {
-    console.error('[DB] Error al inicializar tabla historial_expedientes:', err);
+    console.error('[DB] Error al inicializar tabla historial_expedientes o columnas:', err);
   }
 };
 initDB();
@@ -144,12 +151,14 @@ app.get('/expedientes', authenticateToken, async (req: Request, res: Response): 
 
     let q = `
       SELECT e.*, p.nombre AS proyecto_nombre, d.nombre AS disciplina_nombre,
+             pr.nombre AS proceso_nombre,
              u.nombre AS subido_por_nombre, a.id AS id_area
       FROM expedientes e
       JOIN proyectos p ON p.id = e.id_proyecto
       JOIN disciplinas d ON d.id = e.id_disciplina
       JOIN usuarios u ON u.id = e.subido_por
       JOIN areas a ON a.id = p.id_area
+      LEFT JOIN procesos pr ON pr.id = e.id_proceso
       WHERE 1=1
     `;
     const vals: any[] = [];
@@ -193,12 +202,14 @@ app.get('/expedientes/:id', authenticateToken, async (req: Request, res: Respons
     const user: User = (req as any).user;
     const r = await pool.query(`
       SELECT e.*, p.nombre AS proyecto_nombre, d.nombre AS disciplina_nombre,
+             pr.nombre AS proceso_nombre,
              u.nombre AS subido_por_nombre, a.id AS id_area
       FROM expedientes e
       JOIN proyectos p ON p.id = e.id_proyecto
       JOIN disciplinas d ON d.id = e.id_disciplina
       JOIN usuarios u ON u.id = e.subido_por
       JOIN areas a ON a.id = p.id_area
+      LEFT JOIN procesos pr ON pr.id = e.id_proceso
       WHERE e.id = $1
     `, [req.params.id]);
 
@@ -347,11 +358,11 @@ app.post('/expedientes',
     const client = await pool.connect();
     try {
       const user: User = (req as any).user;
-      const { titulo, id_proyecto, id_disciplina, respuestas_formulario } = req.body;
+      const { titulo, id_proyecto, id_disciplina, id_proceso, respuestas_formulario } = req.body;
       const files = (req as any).files as Express.Multer.File[] | undefined;
 
-      if (!titulo || !id_proyecto || !id_disciplina || !files || files.length === 0) {
-        res.status(400).json({ error: 'titulo, id_proyecto, id_disciplina y al menos un archivo son requeridos' }); return;
+      if (!titulo || !id_proyecto || !id_disciplina || !id_proceso || !files || files.length === 0) {
+        res.status(400).json({ error: 'titulo, id_proyecto, id_disciplina, id_proceso y al menos un archivo son requeridos' }); return;
       }
 
       // Validar que el proyecto pertenece al área del usuario (si no es administrador)
@@ -387,19 +398,19 @@ app.post('/expedientes',
       const finalArchivoKey = keys.length === 1 ? keys[0] : JSON.stringify(keys);
       const finalNombreArchivo = names.length === 1 ? names[0] : JSON.stringify(names);
 
-      // Insertar expediente único
+      // Insertar expediente único con id_proceso
       const expResult = await client.query(`
-        INSERT INTO expedientes (titulo, id_proyecto, id_disciplina, subido_por, archivo_key, nombre_archivo, estado, version)
-        VALUES ($1, $2, $3, $4, $5, $6, 'PENDIENTE', 1)
+        INSERT INTO expedientes (titulo, id_proyecto, id_disciplina, id_proceso, subido_por, archivo_key, nombre_archivo, estado, version)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDIENTE', 1)
         RETURNING *
-      `, [titulo, id_proyecto, id_disciplina, user.id, finalArchivoKey, finalNombreArchivo]);
+      `, [titulo, id_proyecto, id_disciplina, id_proceso, user.id, finalArchivoKey, finalNombreArchivo]);
       const expediente = expResult.rows[0];
 
       // Registrar en historial
       await client.query(
         `INSERT INTO public.historial_expedientes (id_expediente, evento, descripcion, id_usuario)
          VALUES ($1, 'Creación', $2, $3)`,
-        [expediente.id, `Expediente creado: "${titulo}"`, user.id]
+        [expediente.id, `Expediente creado y asociado al proceso ID ${id_proceso}: "${titulo}"`, user.id]
       );
 
       // Insertar respuestas de formulario si vienen
@@ -421,76 +432,48 @@ app.post('/expedientes',
         }
       }
 
-      // Asignación automática de tarea
-      const id_area_proyecto = proyQ.rows[0].id_area;
-      const procesoQ = await client.query(`
-        SELECT pr.id, e.id AS etapa_id, e.id_revisor
-        FROM procesos pr
-        JOIN etapas e ON e.id_proceso = pr.id AND e.orden = 1 AND e.estado = 'activo'
-        WHERE pr.id_area = $1 AND pr.estado = 'activo'
-        ORDER BY pr.id DESC LIMIT 1
-      `, [id_area_proyecto]);
+      // Asignación de tarea al revisor de la primera etapa (orden = 1) del proceso seleccionado
+      const etapaQ = await client.query(`
+        SELECT e.id AS etapa_id, e.id_revisor
+        FROM etapas e
+        WHERE e.id_proceso = $1 AND e.orden = 1 AND e.estado = 'activo'
+        LIMIT 1
+      `, [id_proceso]);
 
-      let etapa = procesoQ.rows.length ? procesoQ.rows[0] : null;
+      let etapa = etapaQ.rows.length ? etapaQ.rows[0] : null;
 
       if (!etapa || !etapa.id_revisor) {
-        const fallbackQ = await client.query(`
-          SELECT pr.id, e.id AS etapa_id, e.id_revisor
-          FROM procesos pr
-          JOIN etapas e ON e.id_proceso = pr.id AND e.orden = 1 AND e.estado = 'activo'
-          WHERE pr.estado = 'activo'
-          ORDER BY pr.id DESC LIMIT 1
-        `);
-        if (fallbackQ.rows.length && fallbackQ.rows[0].id_revisor) {
-          etapa = fallbackQ.rows[0];
-        }
+        throw new Error('El proceso seleccionado no posee una etapa inicial activa (etapa con orden = 1) con revisor asignado.');
       }
 
       await client.query('COMMIT');
 
       // Asignación de tareas por HTTP (fuera de la transacción de base de datos)
-      if (etapa) {
-        try {
-          // Buscar todos los revisores activos asignados al área
-          const revisoresAreaQ = await client.query(
-            "SELECT id FROM usuarios WHERE rol = 'revisor' AND id_area = $1 AND estado = 'activo'",
-            [id_area_proyecto]
-          );
-          
-          let idsRevisores: number[] = [];
-          if (revisoresAreaQ.rows.length > 0) {
-            idsRevisores = revisoresAreaQ.rows.map(r => r.id);
-          } else if (etapa.id_revisor) {
-            idsRevisores = [etapa.id_revisor];
-          }
-
-          const TAREAS_SERVICE_URL = process.env.TAREAS_SERVICE_URL || 'http://service-tareas:3004';
-          for (const id_revisor of idsRevisores) {
-            const tRes = await fetch(`${TAREAS_SERVICE_URL}/tareas`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                id_expediente: expediente.id,
-                id_usuario_asignado: id_revisor,
-                id_etapa: etapa.etapa_id,
-                id_usuario_responsable: user.id
-              })
-            });
-            if (!tRes.ok) {
-              console.error(`[Error] Falló la creación de tarea para revisor ${id_revisor}: ${tRes.statusText}`);
-            }
-          }
-        } catch (err) {
-          console.error('[Error] No se pudo conectar con service-tareas:', err);
+      try {
+        const id_revisor = etapa.id_revisor;
+        const TAREAS_SERVICE_URL = process.env.TAREAS_SERVICE_URL || 'http://service-tareas:3004';
+        const tRes = await fetch(`${TAREAS_SERVICE_URL}/tareas`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id_expediente: expediente.id,
+            id_usuario_asignado: id_revisor,
+            id_etapa: etapa.etapa_id,
+            id_usuario_responsable: user.id
+          })
+        });
+        if (!tRes.ok) {
+          console.error(`[Error] Falló la creación de tarea para revisor ${id_revisor}: ${tRes.statusText}`);
         }
-      } else {
-        console.warn(`[ADVERTENCIA] No existe proceso/etapa configurada (ni siquiera fallback) para área ${id_area_proyecto}. Expediente ${expediente.id} creado sin tarea.`);
+      } catch (err) {
+        console.error('[Error] No se pudo conectar con service-tareas:', err);
       }
 
       res.status(201).json(expediente);
-    } catch (e) {
+    } catch (e: any) {
       await client.query('ROLLBACK');
-      console.error(e); res.status(500).json({ error: 'Error interno' });
+      console.error(e);
+      res.status(500).json({ error: e.message || 'Error interno' });
     } finally { client.release(); }
   }
 );
@@ -549,13 +532,16 @@ app.post('/expedientes/:id/nueva-version',
       );
       const nuevaVersion = (verQ.rows[0].max_ver || 1) + 1;
 
+      // Heredar el id_proceso
+      const id_proceso = original.id_proceso;
+
       const newExp = await client.query(`
-        INSERT INTO expedientes (titulo, id_proyecto, id_disciplina, subido_por, archivo_key, nombre_archivo, estado, id_expediente_padre, version)
-        VALUES ($1, $2, $3, $4, $5, $6, 'PENDIENTE', $7, $8)
+        INSERT INTO expedientes (titulo, id_proyecto, id_disciplina, id_proceso, subido_por, archivo_key, nombre_archivo, estado, id_expediente_padre, version)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDIENTE', $8, $9)
         RETURNING *
       `, [
         titulo || original.titulo,
-        original.id_proyecto, original.id_disciplina,
+        original.id_proyecto, original.id_disciplina, id_proceso,
         user.id, finalArchivoKey, finalNombreArchivo,
         raiz, nuevaVersion
       ]);
@@ -568,76 +554,48 @@ app.post('/expedientes/:id/nueva-version',
         [expediente.id, `Nueva versión ${nuevaVersion} subida: "${titulo || original.titulo}"`, user.id]
       );
 
-      // Obtener id_area del proyecto para asignar tarea
-      const proyQ = await client.query('SELECT id_area FROM proyectos WHERE id = $1', [original.id_proyecto]);
-      const id_area = proyQ.rows[0]?.id_area;
+      // Obtener la primera etapa (orden = 1) del proceso
+      const etapaQ = await client.query(`
+        SELECT e.id AS etapa_id, e.id_revisor
+        FROM etapas e
+        WHERE e.id_proceso = $1 AND e.orden = 1 AND e.estado = 'activo'
+        LIMIT 1
+      `, [id_proceso]);
 
-      const procesoQ = await client.query(`
-        SELECT pr.id, e.id AS etapa_id, e.id_revisor
-        FROM procesos pr
-        JOIN etapas e ON e.id_proceso = pr.id AND e.orden = 1 AND e.estado = 'activo'
-        WHERE pr.id_area = $1 AND pr.estado = 'activo'
-        ORDER BY pr.id DESC LIMIT 1
-      `, [id_area]);
-
-      let etapa = procesoQ.rows.length ? procesoQ.rows[0] : null;
+      let etapa = etapaQ.rows.length ? etapaQ.rows[0] : null;
 
       if (!etapa || !etapa.id_revisor) {
-        const fallbackQ = await client.query(`
-          SELECT pr.id, e.id AS etapa_id, e.id_revisor
-          FROM procesos pr
-          JOIN etapas e ON e.id_proceso = pr.id AND e.orden = 1 AND e.estado = 'activo'
-          WHERE pr.estado = 'activo'
-          ORDER BY pr.id DESC LIMIT 1
-        `);
-        if (fallbackQ.rows.length && fallbackQ.rows[0].id_revisor) {
-          etapa = fallbackQ.rows[0];
-        }
+        throw new Error('El proceso del expediente no posee una etapa inicial activa (etapa con orden = 1) con revisor asignado.');
       }
 
       await client.query('COMMIT');
 
       // Asignación de tareas por HTTP (fuera de la transacción de base de datos)
-      if (etapa) {
-        try {
-          // Buscar todos los revisores activos asignados al área
-          const revisoresAreaQ = await client.query(
-            "SELECT id FROM usuarios WHERE rol = 'revisor' AND id_area = $1 AND estado = 'activo'",
-            [id_area]
-          );
-          
-          let idsRevisores: number[] = [];
-          if (revisoresAreaQ.rows.length > 0) {
-            idsRevisores = revisoresAreaQ.rows.map(r => r.id);
-          } else if (etapa.id_revisor) {
-            idsRevisores = [etapa.id_revisor];
-          }
-
-          const TAREAS_SERVICE_URL = process.env.TAREAS_SERVICE_URL || 'http://service-tareas:3004';
-          for (const id_revisor of idsRevisores) {
-            const tRes = await fetch(`${TAREAS_SERVICE_URL}/tareas`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                id_expediente: expediente.id,
-                id_usuario_asignado: id_revisor,
-                id_etapa: etapa.etapa_id,
-                id_usuario_responsable: user.id
-              })
-            });
-            if (!tRes.ok) {
-              console.error(`[Error] Falló la creación de tarea para revisor ${id_revisor}: ${tRes.statusText}`);
-            }
-          }
-        } catch (err) {
-          console.error('[Error] No se pudo conectar con service-tareas:', err);
+      try {
+        const id_revisor = etapa.id_revisor;
+        const TAREAS_SERVICE_URL = process.env.TAREAS_SERVICE_URL || 'http://service-tareas:3004';
+        const tRes = await fetch(`${TAREAS_SERVICE_URL}/tareas`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id_expediente: expediente.id,
+            id_usuario_asignado: id_revisor,
+            id_etapa: etapa.etapa_id,
+            id_usuario_responsable: user.id
+          })
+        });
+        if (!tRes.ok) {
+          console.error(`[Error] Falló la creación de tarea para revisor ${id_revisor}: ${tRes.statusText}`);
         }
+      } catch (err) {
+        console.error('[Error] No se pudo conectar con service-tareas:', err);
       }
 
       res.status(201).json(expediente);
-    } catch (e) {
+    } catch (e: any) {
       await client.query('ROLLBACK');
-      console.error(e); res.status(500).json({ error: 'Error interno' });
+      console.error(e);
+      res.status(500).json({ error: e.message || 'Error interno' });
     } finally { client.release(); }
   }
 );
@@ -725,5 +683,7 @@ app.get('/expedientes/:id/historial', authenticateToken, async (req: Request, re
   }
 });
 
-app.listen(PORT, () => console.log(`service-expedientes corriendo en puerto ${PORT}`));
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => console.log(`service-expedientes corriendo en puerto ${PORT}`));
+}
 export default app;

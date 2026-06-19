@@ -23,6 +23,8 @@ docker-compose.local.yml
 INSTRUCTIVO_DESPLIEGUE.md
 
 # Archivos temporales de prueba y scripts de desarrollo
+test_html_mail.js
+test_mail.js
 test_e2e.ps1
 test_download.js
 test_exp.js

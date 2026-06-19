@@ -144,7 +144,7 @@ export const api = {
     request(`${API_MANTENEDORES}/procesos${id_area ? `?id_area=${id_area}` : ''}`),
   getProceso: (id: number): Promise<Proceso> =>
     request(`${API_MANTENEDORES}/procesos/${id}`),
-  createProceso: (data: { nombre: string; id_area: number }): Promise<Proceso> =>
+  createProceso: (data: { nombre: string; id_area: number; etapas?: { nombre: string; orden: number; id_revisor: number }[] }): Promise<Proceso> =>
     request(`${API_MANTENEDORES}/procesos`, { method: 'POST', body: JSON.stringify(data) }),
   updateProceso: (id: number, data: { nombre: string; id_area: number; estado?: string }): Promise<Proceso> =>
     request(`${API_MANTENEDORES}/procesos/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -164,8 +164,8 @@ export const api = {
     return request(`${API_TAREAS}/tareas${qs}`);
   },
   getTarea: (id: number): Promise<Tarea> => request(`${API_TAREAS}/tareas/${id}`),
-  resolverTarea: (id: number, estado: string, comentario: string): Promise<Tarea> =>
-    request(`${API_TAREAS}/tareas/${id}`, { method: 'PUT', body: JSON.stringify({ estado, comentario }) }),
+  resolverTarea: (id: number, estado: string, comentario: string, accion_rechazo?: string): Promise<Tarea> =>
+    request(`${API_TAREAS}/tareas/${id}`, { method: 'PUT', body: JSON.stringify({ estado, comentario, accion_rechazo }) }),
 
   // Historial y Archivado
   getExpedienteHistorial: (id: number): Promise<HistorialExpediente[]> =>
