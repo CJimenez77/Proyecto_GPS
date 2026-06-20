@@ -12,12 +12,12 @@ import {
 import { api, getCurrentUser } from '../api';
 import type { Expediente, ExpedienteVersion, HistorialExpediente } from '../entities';
 
-const estadoColors: Record<string, "neutral" | "warning" | "success" | "danger"> = {
-  PENDIENTE: 'warning', APROBADO: 'success', RECHAZADO: 'danger', RECHAZADO_DEFINITIVO: 'danger'
+const estadoColors: Record<string, "neutral" | "warning" | "success" | "danger" | "informative"> = {
+  PENDIENTE: 'warning', APROBADO: 'success', RECHAZADO: 'danger', RECHAZADO_DEFINITIVO: 'danger', ARCHIVADO: 'neutral'
 };
 
 const estadoLabel: Record<string, string> = {
-  PENDIENTE: 'Pendiente de Revisión', APROBADO: 'Aprobado', RECHAZADO: 'Rechazado (Requiere Corrección)', RECHAZADO_DEFINITIVO: 'Rechazado Definitivo'
+  PENDIENTE: 'Pendiente de Revisión', APROBADO: 'Aprobado', RECHAZADO: 'Rechazado (Requiere Corrección)', RECHAZADO_DEFINITIVO: 'Rechazado Definitivo', ARCHIVADO: 'Archivado'
 };
 
 export default function ExpedienteDetail() {
@@ -80,6 +80,19 @@ export default function ExpedienteDetail() {
       setHistorial(hist);
     } catch (e: any) {
       alert('Error al archivar expediente: ' + e.message);
+    }
+  };
+
+  const handleDesarchivar = async () => {
+    if (!expediente) return;
+    if (!window.confirm('¿Está seguro de que desea desarchivar este expediente? Esto lo restaurará a su estado anterior.')) return;
+    try {
+      const res = await api.desarchivarExpediente(expediente.id);
+      setExpediente(res);
+      const hist = await api.getExpedienteHistorial(expediente.id);
+      setHistorial(hist);
+    } catch (e: any) {
+      alert('Error al desarchivar expediente: ' + e.message);
     }
   };
 
@@ -148,7 +161,7 @@ export default function ExpedienteDetail() {
         <Button appearance="subtle" icon={<ArrowLeft24Regular />} onClick={() => navigate(-1)} />
         <div style={{ flex: 1 }}>
           <Text weight="semibold" size={800} block>{expediente.titulo}</Text>
-          <Text size={200} style={{ color: 'gray' }}>
+          <Text size={200} style={{ color: 'var(--colorNeutralForeground4)' }}>
             {(expediente as any).proyecto_nombre} · {(expediente as any).disciplina_nombre} · Proceso: {(expediente as any).proceso_nombre || 'Sin Proceso'}
           </Text>
         </div>
@@ -159,6 +172,11 @@ export default function ExpedienteDetail() {
         {user?.rol === 'administrador' && expediente.estado !== 'ARCHIVADO' && (
           <Button icon={<Archive24Regular />} appearance="subtle" onClick={handleArchivar}>
             Archivar
+          </Button>
+        )}
+        {user?.rol === 'administrador' && expediente.estado === 'ARCHIVADO' && (
+          <Button icon={<Archive24Regular />} appearance="subtle" onClick={handleDesarchivar}>
+            Desarchivar
           </Button>
         )}
       </div>
@@ -175,14 +193,14 @@ export default function ExpedienteDetail() {
 
             {/* Alerta si está rechazado */}
             {expediente.estado === 'RECHAZADO' && (
-              <div style={{ padding: 16, backgroundColor: '#fef0f0', borderRadius: 8, border: '1px solid #f1b0b0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ padding: 16, backgroundColor: 'var(--colorStatusDangerBackground1)', borderRadius: 8, border: '1px solid var(--colorStatusDangerBorder1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <Text weight="semibold" block style={{ color: '#c50f1f' }}>Documento Rechazado</Text>
-                  <Text size={200} style={{ color: '#c50f1f' }}>Este expediente fue rechazado y requiere correcciones. Se debe subir una nueva versión corregida.</Text>
+                  <Text weight="semibold" block style={{ color: 'var(--colorStatusDangerForeground1)' }}>Documento Rechazado</Text>
+                  <Text size={200} style={{ color: 'var(--colorStatusDangerForeground1)' }}>Este expediente fue rechazado y requiere correcciones. Se debe subir una nueva versión corregida.</Text>
                 </div>
                 {canSubirVersion && (
                   <Button icon={<Add24Regular />} appearance="primary" onClick={() => setIsDrawerOpen(true)}
-                    style={{ backgroundColor: '#c50f1f' }}>
+                    style={{ backgroundColor: 'var(--colorStatusDangerBorder1)', color: 'var(--colorStatusDangerForeground1)' }}>
                     Subir Corrección
                   </Button>
                 )}
@@ -191,22 +209,22 @@ export default function ExpedienteDetail() {
 
             {/* Alerta si está rechazado definitivamente */}
             {expediente.estado === 'RECHAZADO_DEFINITIVO' && (
-              <div style={{ padding: 16, backgroundColor: '#fef0f0', borderRadius: 8, border: '1px solid #f1b0b0', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <Text weight="semibold" block style={{ color: '#c50f1f' }}>Rechazado Definitivamente</Text>
-                <Text size={200} style={{ color: '#c50f1f' }}>Este expediente ha sido rechazado de manera definitiva. No se admiten correcciones ni nuevas versiones.</Text>
+              <div style={{ padding: 16, backgroundColor: 'var(--colorStatusDangerBackground1)', borderRadius: 8, border: '1px solid var(--colorStatusDangerBorder1)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <Text weight="semibold" block style={{ color: 'var(--colorStatusDangerForeground1)' }}>Rechazado Definitivamente</Text>
+                <Text size={200} style={{ color: 'var(--colorStatusDangerForeground1)' }}>Este expediente ha sido rechazado de manera definitiva. No se admiten correcciones ni nuevas versiones.</Text>
               </div>
             )}
 
             {/* Documentos */}
-            <div style={{ padding: 20, backgroundColor: 'white', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+            <div style={{ padding: 20, backgroundColor: 'var(--colorNeutralBackground1)', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
               <Text weight="semibold" size={400} block style={{ marginBottom: 16 }}>Documento(s)</Text>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {downloadUrls.map((item, idx) => (
-                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 16px', backgroundColor: '#f5f5f5', borderRadius: 8 }}>
+                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 16px', backgroundColor: 'var(--colorNeutralBackground3)', borderRadius: 8 }}>
                     <DocumentPdf24Regular style={{ color: '#c50f1f', fontSize: 24 }} />
                     <div style={{ flex: 1, overflow: 'hidden' }}>
                       <Text weight="semibold" block style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.nombre_archivo}</Text>
-                      <Text size={200} style={{ color: 'gray' }}>
+                      <Text size={200} style={{ color: 'var(--colorNeutralForeground4)' }}>
                         Subido el {new Date(expediente.created_at).toLocaleDateString('es-CL', {
                           year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
                         })}
@@ -224,14 +242,14 @@ export default function ExpedienteDetail() {
                 {downloadUrls.length === 0 && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 12 }}>
                     <Spinner size="tiny" />
-                    <Text size={200} style={{ color: 'gray' }}>Cargando enlaces de descarga...</Text>
+                    <Text size={200} style={{ color: 'var(--colorNeutralForeground4)' }}>Cargando enlaces de descarga...</Text>
                   </div>
                 )}
               </div>
             </div>
 
             {/* Metadatos del formulario dinámico */}
-            <div style={{ padding: 20, backgroundColor: 'white', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+            <div style={{ padding: 20, backgroundColor: 'var(--colorNeutralBackground1)', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
                 <Form24Regular style={{ color: '#0078d4' }} />
                 <Text weight="semibold" size={400}>Metadatos del Documento</Text>
@@ -246,10 +264,10 @@ export default function ExpedienteDetail() {
                   {expediente.respuestas_formulario!.map(rf => (
                     <div key={rf.id_campo} style={{
                       padding: 12, borderRadius: 6,
-                      borderLeft: '4px solid #0078d4',
-                      backgroundColor: '#f0f4ff'
+                      borderLeft: '4px solid var(--colorBrandBackground)',
+                      backgroundColor: 'var(--colorBrandBackground2)'
                     }}>
-                      <Text size={100} style={{ color: '#0078d4', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }} block>
+                      <Text size={100} style={{ color: 'var(--colorBrandForeground1)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }} block>
                         {rf.etiqueta}
                       </Text>
                       <Text weight="semibold" size={300} block style={{ marginTop: 4 }}>{rf.valor || '—'}</Text>
@@ -257,8 +275,8 @@ export default function ExpedienteDetail() {
                   ))}
                 </div>
               ) : (
-                <div style={{ padding: 24, textAlign: 'center', backgroundColor: '#fafafa', borderRadius: 8, border: '1px dashed #ccc' }}>
-                  <Text style={{ color: 'gray' }}>Este expediente no tiene metadatos de formulario asociados.</Text>
+                <div style={{ padding: 24, textAlign: 'center', backgroundColor: 'var(--colorNeutralBackground3)', borderRadius: 8, border: '1px dashed var(--colorNeutralStroke1)' }}>
+                  <Text style={{ color: 'var(--colorNeutralForeground4)' }}>Este expediente no tiene metadatos de formulario asociados.</Text>
                 </div>
               )}
             </div>
@@ -266,7 +284,7 @@ export default function ExpedienteDetail() {
 
           {/* Columna lateral: historial */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ padding: 16, backgroundColor: 'white', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+            <div style={{ padding: 16, backgroundColor: 'var(--colorNeutralBackground1)', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                 <CalendarLtr24Regular style={{ color: '#555' }} />
                 <Text weight="semibold" size={400}>Historial de Versiones</Text>
@@ -275,12 +293,12 @@ export default function ExpedienteDetail() {
                 {versiones.map(v => (
                   <div key={v.id} style={{
                     paddingLeft: 12,
-                    borderLeft: v.id === expediente.id ? '3px solid #0078d4' : '3px solid #ddd'
+                    borderLeft: v.id === expediente.id ? '3px solid var(--colorBrandBackground)' : '3px solid var(--colorNeutralStroke2)'
                   }}>
-                    <Text weight="semibold" block style={{ color: v.id === expediente.id ? '#0078d4' : 'inherit' }}>
+                    <Text weight="semibold" block style={{ color: v.id === expediente.id ? 'var(--colorBrandForeground1)' : 'inherit' }}>
                       Versión {v.version}
                     </Text>
-                    <Text size={200} block style={{ color: 'gray' }}>
+                    <Text size={200} block style={{ color: 'var(--colorNeutralForeground4)' }}>
                       {new Date(v.created_at).toLocaleDateString('es-CL')}
                     </Text>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
@@ -296,12 +314,12 @@ export default function ExpedienteDetail() {
           </div>
         </div>
       ) : (
-        <div style={{ padding: 24, backgroundColor: 'white', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+        <div style={{ padding: 24, backgroundColor: 'var(--colorNeutralBackground1)', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
           <Text weight="semibold" size={500} block style={{ marginBottom: 24 }}>Línea de Tiempo de Auditoría</Text>
           
-          <div style={{ position: 'relative', paddingLeft: 32, borderLeft: '2px solid #e2e8f0', marginLeft: 8, display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <div style={{ position: 'relative', paddingLeft: 32, borderLeft: '2px solid var(--colorNeutralStroke1)', marginLeft: 8, display: 'flex', flexDirection: 'column', gap: 24 }}>
             {historial.length === 0 ? (
-              <Text style={{ color: 'gray', fontStyle: 'italic' }}>No hay registros de auditoría para este expediente.</Text>
+              <Text style={{ color: 'var(--colorNeutralForeground4)', fontStyle: 'italic' }}>No hay registros de auditoría para este expediente.</Text>
             ) : (
               historial.map(evt => {
                 let badgeColor: "warning" | "success" | "danger" | "informative" | "neutral" = "neutral";
@@ -324,16 +342,16 @@ export default function ExpedienteDetail() {
                       width: 14, 
                       height: 14, 
                       borderRadius: '50%', 
-                      backgroundColor: 'white', 
-                      border: '3px solid #0078d4',
-                      boxShadow: '0 0 0 4px #eff6fc'
+                      backgroundColor: 'var(--colorNeutralBackground1)', 
+                      border: '3px solid var(--colorBrandBackground)',
+                      boxShadow: '0 0 0 4px var(--colorBrandBackground2)'
                     }} />
 
                     <div style={{ 
                       padding: 16, 
                       borderRadius: 8, 
-                      backgroundColor: '#f8fafc', 
-                      border: '1px solid #e2e8f0',
+                      backgroundColor: 'var(--colorNeutralBackground3)', 
+                      border: '1px solid var(--colorNeutralStroke1)',
                       boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
@@ -343,14 +361,14 @@ export default function ExpedienteDetail() {
                             <Badge appearance="outline">v{evt.expediente_version}</Badge>
                           )}
                         </div>
-                        <Text size={100} style={{ color: 'gray' }}>
+                        <Text size={100} style={{ color: 'var(--colorNeutralForeground4)' }}>
                           {new Date(evt.created_at).toLocaleString('es-CL', {
                             year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
                           })}
                         </Text>
                       </div>
-                      <Text block style={{ fontSize: 14, color: '#1e293b', marginBottom: 8 }}>{evt.descripcion}</Text>
-                      <Text size={100} style={{ color: 'gray', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Text block style={{ fontSize: 14, color: 'var(--colorNeutralForeground1)', marginBottom: 8 }}>{evt.descripcion}</Text>
+                      <Text size={100} style={{ color: 'var(--colorNeutralForeground4)', display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Person24Regular style={{ fontSize: 12 }} />
                         Responsable: {evt.usuario_nombre || `Usuario #${evt.id_usuario}`}
                       </Text>
@@ -370,7 +388,7 @@ export default function ExpedienteDetail() {
         </DrawerHeader>
         <DrawerBody>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ padding: 12, backgroundColor: '#fff4ce', borderRadius: 8, border: '1px solid #fbdc81' }}>
+            <div style={{ padding: 12, backgroundColor: 'var(--colorStatusWarningBackground1)', borderRadius: 8, border: '1px solid var(--colorStatusWarningBorder1)' }}>
               <Text size={200} block weight="semibold">¿Qué ocurre al subir una nueva versión?</Text>
               <Text size={200} block style={{ marginTop: 4 }}>
                 El archivo reemplazará la versión rechazada y se generará automáticamente una nueva tarea para los revisores.
@@ -395,13 +413,13 @@ export default function ExpedienteDetail() {
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         padding: '6px 10px',
-                        backgroundColor: '#f3f2f1',
+                        backgroundColor: 'var(--colorNeutralBackground3)',
                         borderRadius: 4,
-                        borderLeft: '3px solid #0078d4',
+                        borderLeft: '3px solid var(--colorBrandBackground)',
                       }}
                     >
-                      <Text size={200} style={{ color: '#323130', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80%' }}>
-                        📄 {file.name} <span style={{ color: '#605e5c', marginLeft: 6 }}>({(file.size / (1024 * 1024)).toFixed(2)} MB)</span>
+                      <Text size={200} style={{ color: 'var(--colorNeutralForeground1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80%' }}>
+                        📄 {file.name} <span style={{ color: 'var(--colorNeutralForeground4)', marginLeft: 6 }}>({(file.size / (1024 * 1024)).toFixed(2)} MB)</span>
                       </Text>
                       <Button
                         size="small"

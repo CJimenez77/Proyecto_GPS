@@ -639,6 +639,71 @@ app.put('/expedientes/:id/archivar',
   }
 );
 
+// ─── PUT /expedientes/:id/desarchivar ─────────────────────────────────────────
+app.put('/expedientes/:id/desarchivar',
+  authenticateToken,
+  requireRoles('administrador'),
+  async (req: Request, res: Response): Promise<void> => {
+    const client = await pool.connect();
+    try {
+      const user: User = (req as any).user;
+      
+      const origQ = await client.query('SELECT * FROM expedientes WHERE id = $1', [req.params.id]);
+      if (!origQ.rows.length) { res.status(404).json({ error: 'No encontrado' }); return; }
+      const original = origQ.rows[0];
+
+      if (original.estado !== 'ARCHIVADO') {
+        res.status(400).json({ error: 'El expediente no está archivado' });
+        return;
+      }
+
+      await client.query('BEGIN');
+
+      // Buscar el último estado en el historial antes de ser archivado
+      const histQ = await client.query(
+        `SELECT descripcion, evento FROM public.historial_expedientes 
+         WHERE id_expediente = $1 AND descripcion NOT LIKE '%archivado%' AND descripcion NOT LIKE '%Archivado%'
+         ORDER BY created_at DESC LIMIT 1`,
+        [req.params.id]
+      );
+
+      let estadoDestino = 'PENDIENTE'; // por defecto
+      if (histQ.rows.length > 0) {
+        const desc = histQ.rows[0].descripcion;
+        if (desc.includes('"APROBADO"')) {
+          estadoDestino = 'APROBADO';
+        } else if (desc.includes('"RECHAZADO_DEFINITIVO"')) {
+          estadoDestino = 'RECHAZADO_DEFINITIVO';
+        } else if (desc.includes('"RECHAZADO"')) {
+          estadoDestino = 'RECHAZADO';
+        }
+      }
+
+      // Actualizar estado del expediente
+      const updated = await client.query(
+        "UPDATE expedientes SET estado = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *",
+        [estadoDestino, req.params.id]
+      );
+
+      // Registrar en historial
+      await client.query(
+        `INSERT INTO public.historial_expedientes (id_expediente, evento, descripcion, id_usuario)
+         VALUES ($1, 'Cambio de Estado', $2, $3)`,
+        [req.params.id, `Expediente desarchivado. Estado restaurado a "${estadoDestino}".`, user.id]
+      );
+
+      await client.query('COMMIT');
+      res.json(updated.rows[0]);
+    } catch (e) {
+      await client.query('ROLLBACK');
+      console.error(e);
+      res.status(500).json({ error: 'Error interno' });
+    } finally {
+      client.release();
+    }
+  }
+);
+
 // ─── GET /expedientes/:id/historial ──────────────────────────────────────────
 app.get('/expedientes/:id/historial', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {

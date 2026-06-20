@@ -107,7 +107,7 @@ export default function Usuarios() {
   };
 
   const cardStyle: React.CSSProperties = {
-    padding: 16, backgroundColor: 'white', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.1)'
+    padding: 16, backgroundColor: 'var(--colorNeutralBackground1)', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.1)'
   };
 
   if (currentUser?.rol !== 'administrador') {
@@ -130,7 +130,7 @@ export default function Usuarios() {
 
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left' }}>
+            <tr style={{ borderBottom: '2px solid var(--colorNeutralStroke1)', textAlign: 'left' }}>
               <th style={{ padding: 12 }}><Text weight="semibold">Nombre</Text></th>
               <th style={{ padding: 12 }}><Text weight="semibold">Username</Text></th>
               <th style={{ padding: 12 }}><Text weight="semibold">Rol</Text></th>
@@ -149,10 +149,10 @@ export default function Usuarios() {
               }
 
               return (
-                <tr key={u.id} style={{ borderBottom: '1px solid #eee' }}>
+                <tr key={u.id} style={{ borderBottom: '1px solid var(--colorNeutralStroke2)' }}>
                   <td style={{ padding: 12 }}>
                     <Text weight="semibold" block>{u.nombre}</Text>
-                    <Text size={200} style={{ color: 'gray' }}>{u.email}</Text>
+                    <Text size={200} style={{ color: 'var(--colorNeutralForeground3)' }}>{u.email}</Text>
                   </td>
                   <td style={{ padding: 12 }}><Text>{u.username}</Text></td>
                   <td style={{ padding: 12 }}>
@@ -217,8 +217,8 @@ export default function Usuarios() {
             </Field>
             {form.rol !== 'administrador' && (
               <Field label="Área Asignada" required>
-                <select style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #d1d1d1', fontFamily: 'inherit' }} value={form.id_area} onChange={e => setForm({ ...form, id_area: Number(e.target.value) })}>
-                  <option value={0}>Seleccionar área...</option>
+                <select style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid var(--colorNeutralStroke1)', fontFamily: 'inherit', backgroundColor: 'var(--colorNeutralBackground1)', color: 'var(--colorNeutralForeground1)' }} value={form.id_area} onChange={e => setForm({ ...form, id_area: Number(e.target.value) })}>
+                  <option value={0} style={{ backgroundColor: 'var(--colorNeutralBackground1)', color: 'var(--colorNeutralForeground1)' }}>Seleccionar área...</option>
                   {jerarquia.map(emp => (
                     <optgroup key={emp.id} label={emp.nombre}>
                       {emp.areas.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
@@ -240,7 +240,7 @@ export default function Usuarios() {
         <DrawerHeader>
           <Text weight="semibold" size={500}>Editar Rol</Text>
           {editingUser && (
-            <Text block size={300} style={{ color: '#666', marginTop: 4 }}>
+            <Text block size={300} style={{ color: 'var(--colorNeutralForeground3)', marginTop: 4 }}>
               {editingUser.nombre} ({editingUser.username})
             </Text>
           )}
@@ -248,12 +248,12 @@ export default function Usuarios() {
         <DrawerBody>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{
-              backgroundColor: '#fff4ce',
-              border: '1px solid #ffd335',
+              backgroundColor: 'var(--colorStatusWarningBackground1)',
+              border: '1px solid var(--colorStatusWarningBorder1)',
               borderRadius: 4,
               padding: '10px 14px',
             }}>
-              <Text style={{ fontSize: 12, color: '#835200' }}>
+              <Text style={{ fontSize: 12, color: 'var(--colorStatusWarningForeground1)' }}>
                 ⚠️ Cambiar el rol modifica los permisos del usuario en el sistema inmediatamente.
               </Text>
             </div>
@@ -270,11 +270,11 @@ export default function Usuarios() {
             {rolForm.rol !== 'administrador' && (
               <Field label="Área Asignada" required>
                 <select
-                  style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #d1d1d1', fontFamily: 'inherit' }}
+                  style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid var(--colorNeutralStroke1)', fontFamily: 'inherit', backgroundColor: 'var(--colorNeutralBackground1)', color: 'var(--colorNeutralForeground1)' }}
                   value={rolForm.id_area}
                   onChange={e => setRolForm({ ...rolForm, id_area: Number(e.target.value) })}
                 >
-                  <option value={0}>Seleccionar área...</option>
+                  <option value={0} style={{ backgroundColor: 'var(--colorNeutralBackground1)', color: 'var(--colorNeutralForeground1)' }}>Seleccionar área...</option>
                   {jerarquia.map(emp => (
                     <optgroup key={emp.id} label={emp.nombre}>
                       {emp.areas.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}

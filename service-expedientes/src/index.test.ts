@@ -209,4 +209,35 @@ describe('Microservicio de Expedientes - Tests Unitarios', () => {
     expect(res.status).toBe(200);
     expect(res.body.estado).toBe('ARCHIVADO');
   });
+
+  // 12. PUT /expedientes/:id/desarchivar - forbidden if not admin
+  it('12. PUT /expedientes/:id/desarchivar - debe retornar 403 si no es administrador', async () => {
+    const res = await request(app)
+      .put('/expedientes/1/desarchivar')
+      .set('Authorization', 'Bearer token_valido');
+
+    expect(res.status).toBe(403);
+  });
+
+  // 13. PUT /expedientes/:id/desarchivar - success for admin
+  it('13. PUT /expedientes/:id/desarchivar - debe desarchivar el expediente si es administrador', async () => {
+    const jwt = require('jsonwebtoken');
+    jwt.verify.mockImplementationOnce((token: any, secret: any, callback: any) => {
+      callback(null, { id: 2, username: 'admin', rol: 'administrador', id_area: null });
+    });
+
+    mockClientQuery.mockResolvedValueOnce({ rows: [{ id: 1, estado: 'ARCHIVADO' }] }); // origQ
+    mockClientQuery.mockResolvedValueOnce({ rows: [] }); // BEGIN
+    mockClientQuery.mockResolvedValueOnce({ rows: [{ descripcion: 'Estado cambiado a "APROBADO"' }] }); // histQ
+    mockClientQuery.mockResolvedValueOnce({ rows: [{ id: 1, estado: 'APROBADO' }] }); // UPDATE
+    mockClientQuery.mockResolvedValueOnce({ rows: [] }); // INSERT (audit)
+    mockClientQuery.mockResolvedValueOnce({ rows: [] }); // COMMIT
+
+    const res = await request(app)
+      .put('/expedientes/1/desarchivar')
+      .set('Authorization', 'Bearer token_valido');
+
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe('APROBADO');
+  });
 });

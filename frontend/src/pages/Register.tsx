@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button, Input, Field, Text } from '@fluentui/react-components';
+import { WeatherMoon24Regular, WeatherSunny24Regular } from '@fluentui/react-icons';
 import { api } from '../api';
+import { useTheme } from '../components/ThemeContext';
 
 export default function Register() {
   const [form, setForm] = useState({ nombre: '', username: '', email: '', password: '', confirm: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,10 +52,19 @@ export default function Register() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: '#f5f5f5'
+      backgroundColor: 'var(--colorNeutralBackground2)',
+      position: 'relative'
     }}>
+      <div style={{ position: 'absolute', top: 16, right: 16 }}>
+        <Button 
+          appearance="subtle" 
+          icon={theme === 'light' ? <WeatherMoon24Regular /> : <WeatherSunny24Regular />} 
+          onClick={toggleTheme}
+          title={theme === 'light' ? "Modo Oscuro" : "Modo Claro"}
+        />
+      </div>
       <form onSubmit={handleSubmit} style={{
-        backgroundColor: 'white',
+        backgroundColor: 'var(--colorNeutralBackground1)',
         padding: 40,
         borderRadius: 8,
         boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
@@ -61,7 +73,7 @@ export default function Register() {
         <Text weight="semibold" size={600} block style={{ marginBottom: 8, textAlign: 'center' }}>
           Crear Cuenta
         </Text>
-        <Text block style={{ textAlign: 'center', color: '#666', fontSize: 13, marginBottom: 24 }}>
+        <Text block style={{ textAlign: 'center', color: 'var(--colorNeutralForeground3)', fontSize: 13, marginBottom: 24 }}>
           Sistema de Gestión Documental
         </Text>
 
@@ -131,7 +143,7 @@ export default function Register() {
           {loading ? 'Creando cuenta...' : 'Crear Cuenta'}
         </Button>
 
-        <Text block style={{ marginTop: 16, textAlign: 'center', fontSize: 13, color: '#666' }}>
+        <Text block style={{ marginTop: 16, textAlign: 'center', fontSize: 13, color: 'var(--colorNeutralForeground3)' }}>
           ¿Ya tienes cuenta?{' '}
           <Link to="/login" style={{ color: '#0078d4', textDecoration: 'none', fontWeight: 600 }}>
             Iniciar Sesión
@@ -141,11 +153,11 @@ export default function Register() {
         <div style={{
           marginTop: 16,
           padding: '10px 14px',
-          backgroundColor: '#f0f9ff',
+          backgroundColor: theme === 'light' ? '#f0f9ff' : '#0f2c59',
           borderRadius: 4,
-          border: '1px solid #cfe4f8',
+          border: '1px solid ' + (theme === 'light' ? '#cfe4f8' : '#114488'),
         }}>
-          <Text block style={{ fontSize: 12, color: '#005a9e', lineHeight: '1.5' }}>
+          <Text block style={{ fontSize: 12, color: theme === 'light' ? '#005a9e' : '#9ecbff', lineHeight: '1.5' }}>
             ℹ️ Tu cuenta será creada con el rol de <strong>Lector</strong>. El administrador podrá asignarte un rol diferente según tus funciones.
           </Text>
         </div>

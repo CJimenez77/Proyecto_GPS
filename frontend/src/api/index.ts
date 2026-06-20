@@ -62,7 +62,7 @@ export const api = {
     request(`${API_USUARIOS}/reset-password`, { method: 'POST', body: JSON.stringify({ token, password }) }),
 
   // Expedientes
-  getExpedientes: (params?: { id_proyecto?: number; id_disciplina?: number; estado?: string; titulo?: string; fecha_desde?: string; fecha_hasta?: string }): Promise<Expediente[]> => {
+  getExpedientes: (params?: { id_proyecto?: number; id_disciplina?: number; estado?: string; titulo?: string; fecha_desde?: string; fecha_hasta?: string; incluir_archivados?: boolean | string }): Promise<Expediente[]> => {
     const query = new URLSearchParams();
     if (params) {
       Object.entries(params).forEach(([key, val]) => {
@@ -171,5 +171,7 @@ export const api = {
   getExpedienteHistorial: (id: number): Promise<HistorialExpediente[]> =>
     request(`${API_EXPEDIENTES}/expedientes/${id}/historial`),
   archivarExpediente: (id: number): Promise<Expediente> =>
-    request(`${API_EXPEDIENTES}/expedientes/${id}/archivar`, { method: 'PUT' })
+    request(`${API_EXPEDIENTES}/expedientes/${id}/archivar`, { method: 'PUT' }),
+  desarchivarExpediente: (id: number): Promise<Expediente> =>
+    request(`${API_EXPEDIENTES}/expedientes/${id}/desarchivar`, { method: 'PUT' })
 };

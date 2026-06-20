@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
-import { FluentProvider, webLightTheme } from '@fluentui/react-components'
+import { ThemeProvider } from './components/ThemeContext'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -57,7 +57,7 @@ function App() {
   const token = localStorage.getItem('token');
 
   return (
-    <FluentProvider theme={webLightTheme}>
+    <ThemeProvider>
       <Routes>
         <Route path="/login" element={token ? <Navigate to="/" replace /> : <Login />} />
         <Route path="/register" element={token ? <Navigate to="/" replace /> : <Register />} />
@@ -81,7 +81,7 @@ function App() {
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </FluentProvider>
+    </ThemeProvider>
   );
 }
 

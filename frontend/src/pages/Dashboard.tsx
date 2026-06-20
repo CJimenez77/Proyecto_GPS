@@ -79,7 +79,7 @@ export default function Dashboard() {
 
   const cardStyle: React.CSSProperties = {
     padding: 16,
-    backgroundColor: 'white',
+    backgroundColor: 'var(--colorNeutralBackground1)',
     borderRadius: 8,
     boxShadow: '0 1px 4px rgba(0,0,0,0.1)'
   };
@@ -117,19 +117,19 @@ export default function Dashboard() {
       {/* Counters */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
         <div style={cardStyle}>
-          <Text block style={{ color: 'gray' }}>Total</Text>
+          <Text block style={{ color: 'var(--colorNeutralForeground4)' }}>Total</Text>
           <Text block size={600} weight="semibold">{stats.total}</Text>
         </div>
         <div style={cardStyle}>
-          <Text block style={{ color: 'gray' }}>Pendientes</Text>
+          <Text block style={{ color: 'var(--colorNeutralForeground4)' }}>Pendientes</Text>
           <Text block size={600} weight="semibold">{stats.pendiente}</Text>
         </div>
         <div style={cardStyle}>
-          <Text block style={{ color: 'gray' }}>Aprobados</Text>
+          <Text block style={{ color: 'var(--colorNeutralForeground4)' }}>Aprobados</Text>
           <Text block size={600} weight="semibold">{stats.aprobado}</Text>
         </div>
         <div style={cardStyle}>
-          <Text block style={{ color: 'gray' }}>Rechazados</Text>
+          <Text block style={{ color: 'var(--colorNeutralForeground4)' }}>Rechazados</Text>
           <Text block size={600} weight="semibold">{stats.rechazado}</Text>
         </div>
       </div>
@@ -218,19 +218,19 @@ export default function Dashboard() {
         </TabList>
         <div style={{ marginTop: 16 }}>
           {filteredExpedientes.length === 0 ? (
-            <Text style={{ color: 'gray' }}>No hay expedientes</Text>
+            <Text style={{ color: 'var(--colorNeutralForeground4)' }}>No hay expedientes</Text>
           ) : (
             filteredExpedientes.slice(0, 10).map(exp => (
               <div key={exp.id} style={{ 
                 padding: 12, 
-                borderBottom: '1px solid #eee',
+                borderBottom: '1px solid var(--colorNeutralStroke2)',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center'
               }}>
                 <div>
                   <Text weight="semibold">{exp.titulo}</Text>
-                  <Text block style={{ color: 'gray', fontSize: 12 }}>Versión {exp.version}</Text>
+                  <Text block style={{ color: 'var(--colorNeutralForeground4)', fontSize: 12 }}>Versión {exp.version}</Text>
                 </div>
                 <Badge appearance="filled" color={getBadgeColor(exp.estado)}>
                   {getBadgeText(exp.estado)}

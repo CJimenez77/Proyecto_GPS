@@ -16,9 +16,9 @@ import type { Empresa, Area, Proyecto, Disciplina, Formulario, CampoFormulario, 
 type TabId = 'empresas' | 'areas' | 'proyectos' | 'disciplinas' | 'formularios' | 'procesos';
 type CampoTipo = 'texto' | 'lista' | 'fecha';
 
-const cellStyle: React.CSSProperties = { padding: '10px 12px', borderBottom: '1px solid #f0f0f0' };
-const thStyle: React.CSSProperties = { ...cellStyle, fontWeight: 600, background: '#fafafa', borderBottom: '2px solid #eee', textAlign: 'left' };
-const sel: React.CSSProperties = { width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #d1d1d1', fontFamily: 'inherit', fontSize: 14 };
+const cellStyle: React.CSSProperties = { padding: '10px 12px', borderBottom: '1px solid var(--colorNeutralStroke2)' };
+const thStyle: React.CSSProperties = { ...cellStyle, fontWeight: 600, background: 'var(--colorNeutralBackground3)', borderBottom: '2px solid var(--colorNeutralStroke1)', textAlign: 'left' };
+const sel: React.CSSProperties = { width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid var(--colorNeutralStroke1)', fontFamily: 'inherit', fontSize: 14, backgroundColor: 'var(--colorNeutralBackground1)', color: 'var(--colorNeutralForeground1)' };
 
 const TIPOS: CampoTipo[] = ['texto', 'lista', 'fecha'];
 
@@ -328,7 +328,7 @@ export default function Mantenedores() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
           <Text weight="semibold" size={800}>Mantenedores</Text>
-          <Text block style={{ color: 'gray', marginTop: 2 }}>Gestión de Empresas, Áreas, Proyectos, Disciplinas y Formularios</Text>
+          <Text block style={{ color: 'var(--colorNeutralForeground3)', marginTop: 2 }}>Gestión de Empresas, Áreas, Proyectos, Disciplinas y Formularios</Text>
         </div>
         <Button appearance="primary" icon={<Add24Regular />} onClick={openCreate}>{tabLabel[tab]}</Button>
       </div>
@@ -342,7 +342,7 @@ export default function Mantenedores() {
         <Tab icon={<Flowchart24Regular />} value="procesos">Diseñador de Flujos</Tab>
       </TabList>
 
-      <div style={{ backgroundColor: 'white', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+      <div style={{ backgroundColor: 'var(--colorNeutralBackground1)', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
         {loading ? <div style={{ padding: 40, textAlign: 'center' }}><Spinner /></div> : (
           <>
             {/* EMPRESAS */}
@@ -351,7 +351,7 @@ export default function Mantenedores() {
                 <thead><tr><th style={thStyle}>Nombre</th><th style={thStyle}>RUT</th><th style={thStyle}>Estado</th><th style={thStyle}>Acciones</th></tr></thead>
                 <tbody>
                   {empresas.length === 0
-                    ? <tr><td colSpan={4} style={{ ...cellStyle, textAlign: 'center', color: 'gray' }}>Sin empresas</td></tr>
+                    ? <tr><td colSpan={4} style={{ ...cellStyle, textAlign: 'center', color: 'var(--colorNeutralForeground3)' }}>Sin empresas</td></tr>
                     : empresas.map(e => (
                       <tr key={e.id}>
                         <td style={cellStyle}><Text weight="semibold">{e.nombre}</Text></td>
@@ -373,7 +373,7 @@ export default function Mantenedores() {
                 <thead><tr><th style={thStyle}>Nombre</th><th style={thStyle}>Empresa</th><th style={thStyle}>Estado</th><th style={thStyle}>Acciones</th></tr></thead>
                 <tbody>
                   {areas.length === 0
-                    ? <tr><td colSpan={4} style={{ ...cellStyle, textAlign: 'center', color: 'gray' }}>Sin áreas</td></tr>
+                    ? <tr><td colSpan={4} style={{ ...cellStyle, textAlign: 'center', color: 'var(--colorNeutralForeground3)' }}>Sin áreas</td></tr>
                     : areas.map(a => (
                       <tr key={a.id}>
                         <td style={cellStyle}><Text weight="semibold">{a.nombre}</Text></td>
@@ -395,12 +395,12 @@ export default function Mantenedores() {
                 <thead><tr><th style={thStyle}>Nombre</th><th style={thStyle}>Área</th><th style={thStyle}>Descripción</th><th style={thStyle}>Estado</th><th style={thStyle}>Acciones</th></tr></thead>
                 <tbody>
                   {proyectos.length === 0
-                    ? <tr><td colSpan={5} style={{ ...cellStyle, textAlign: 'center', color: 'gray' }}>Sin proyectos</td></tr>
+                    ? <tr><td colSpan={5} style={{ ...cellStyle, textAlign: 'center', color: 'var(--colorNeutralForeground3)' }}>Sin proyectos</td></tr>
                     : proyectos.map(p => (
                       <tr key={p.id}>
                         <td style={cellStyle}><Text weight="semibold">{p.nombre}</Text></td>
                         <td style={cellStyle}>{areaNombre(p.id_area)}</td>
-                        <td style={cellStyle}><Text style={{ color: 'gray' }}>{p.descripcion || '-'}</Text></td>
+                        <td style={cellStyle}><Text style={{ color: 'var(--colorNeutralForeground3)' }}>{p.descripcion || '-'}</Text></td>
                         <td style={cellStyle}><Badge color={p.estado === 'activo' ? 'success' : 'danger'}>{p.estado}</Badge></td>
                         <td style={cellStyle}>
                           <Button size="small" appearance="subtle" icon={<Edit24Regular />} onClick={() => openEditEntity(p)}>Editar</Button>
@@ -418,7 +418,7 @@ export default function Mantenedores() {
                 <thead><tr><th style={thStyle}>Nombre</th><th style={thStyle}>Proyecto</th><th style={thStyle}>Estado</th><th style={thStyle}>Acciones</th></tr></thead>
                 <tbody>
                   {disciplinas.length === 0
-                    ? <tr><td colSpan={4} style={{ ...cellStyle, textAlign: 'center', color: 'gray' }}>Sin disciplinas</td></tr>
+                    ? <tr><td colSpan={4} style={{ ...cellStyle, textAlign: 'center', color: 'var(--colorNeutralForeground3)' }}>Sin disciplinas</td></tr>
                     : disciplinas.map(d => (
                       <tr key={d.id}>
                         <td style={cellStyle}><Text weight="semibold">{d.nombre}</Text></td>
@@ -440,7 +440,7 @@ export default function Mantenedores() {
                 <thead><tr><th style={thStyle}>Nombre</th><th style={thStyle}>Proyecto</th><th style={thStyle}>Disciplina</th><th style={thStyle}>Campos</th><th style={thStyle}>Acciones</th></tr></thead>
                 <tbody>
                   {formularios.length === 0
-                    ? <tr><td colSpan={5} style={{ ...cellStyle, textAlign: 'center', color: 'gray' }}>Sin formularios. Crea uno para asociarlo a un proyecto/disciplina.</td></tr>
+                    ? <tr><td colSpan={5} style={{ ...cellStyle, textAlign: 'center', color: 'var(--colorNeutralForeground3)' }}>Sin formularios. Crea uno para asociarlo a un proyecto/disciplina.</td></tr>
                     : formularios.map(f => (
                       <tr key={f.id}>
                         <td style={cellStyle}><Text weight="semibold">{f.nombre}</Text></td>
@@ -460,25 +460,25 @@ export default function Mantenedores() {
             {tab === 'procesos' && (
               <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {procesos.length === 0 ? (
-                  <div style={{ padding: 20, textAlign: 'center', color: 'gray' }}>Sin procesos creados.</div>
+                  <div style={{ padding: 20, textAlign: 'center', color: 'var(--colorNeutralForeground3)' }}>Sin procesos creados.</div>
                 ) : (
                   procesos.map(proc => {
                     const isExpanded = expandedProcesos[proc.id];
                     const etapas = procesoEtapas[proc.id] || [];
                     return (
-                      <div key={proc.id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', backgroundColor: '#fafafa' }}>
+                      <div key={proc.id} style={{ border: '1px solid var(--colorNeutralStroke1)', borderRadius: 8, overflow: 'hidden', backgroundColor: 'var(--colorNeutralBackground3)' }}>
                         <div style={{ 
                           padding: '12px 16px', 
                           display: 'flex', 
                           justifyContent: 'space-between', 
                           alignItems: 'center', 
-                          backgroundColor: '#f1f5f9', 
+                          backgroundColor: 'var(--colorNeutralBackground2)', 
                           cursor: 'pointer',
-                          borderBottom: isExpanded ? '1px solid #e2e8f0' : 'none'
+                          borderBottom: isExpanded ? '1px solid var(--colorNeutralStroke1)' : 'none'
                         }} onClick={() => toggleProceso(proc.id)}>
                           <div>
                             <Text weight="semibold" style={{ fontSize: 16 }}>{proc.nombre}</Text>
-                            <Text block size={200} style={{ color: 'gray' }}>Área: {areaNombre(proc.id_area)}</Text>
+                            <Text block size={200} style={{ color: 'var(--colorNeutralForeground3)' }}>Área: {areaNombre(proc.id_area)}</Text>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={e => e.stopPropagation()}>
                             <Badge color={proc.estado === 'activo' ? 'success' : 'danger'}>{proc.estado}</Badge>
@@ -493,7 +493,7 @@ export default function Mantenedores() {
                         </div>
 
                         {isExpanded && (
-                          <div style={{ padding: 16, backgroundColor: 'white' }}>
+                          <div style={{ padding: 16, backgroundColor: 'var(--colorNeutralBackground1)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                               <Text weight="semibold">Flujo de Aprobación (Etapas)</Text>
                               <Button size="small" appearance="primary" icon={<Add24Regular />} onClick={() => openCreateEtapa(proc.id)}>
@@ -503,17 +503,17 @@ export default function Mantenedores() {
 
                             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '10px 0' }}>
                               {etapas.length === 0 ? (
-                                <Text style={{ color: 'gray', fontStyle: 'italic' }}>Este proceso no tiene etapas. Agrega una para comenzar.</Text>
+                                <Text style={{ color: 'var(--colorNeutralForeground3)', fontStyle: 'italic' }}>Este proceso no tiene etapas. Agrega una para comenzar.</Text>
                               ) : (
                                 etapas.map((etapa, idx) => (
                                   <div key={etapa.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                    {idx > 0 && <ArrowRight24Regular style={{ color: '#0078d4' }} />}
+                                    {idx > 0 && <ArrowRight24Regular style={{ color: 'var(--colorBrandForegroundLink)' }} />}
                                     
                                     <div style={{ 
                                       padding: '12px 16px', 
-                                      border: '1px solid #c5d0f0', 
+                                      border: '1px solid var(--colorBrandStroke1)', 
                                       borderRadius: 8, 
-                                      backgroundColor: '#f0f4ff', 
+                                      backgroundColor: 'var(--colorBrandBackground2)', 
                                       minWidth: 160,
                                       position: 'relative',
                                       boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
@@ -523,7 +523,7 @@ export default function Mantenedores() {
                                         <Button size="small" appearance="subtle" icon={<Edit24Regular />} onClick={() => openEditEtapa(proc.id, etapa)} />
                                       </div>
                                       <Text weight="semibold" block style={{ fontSize: 14 }}>{etapa.nombre}</Text>
-                                      <Text size={100} style={{ color: 'gray', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                      <Text size={100} style={{ color: 'var(--colorNeutralForeground3)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
                                         <Person24Regular style={{ fontSize: 12 }} />
                                         {etapa.revisor_nombre || 'Sin revisor'}
                                       </Text>
@@ -612,7 +612,7 @@ export default function Mantenedores() {
                 </select>
               </Field>
 
-              <div style={{ borderTop: '1px solid #eee', paddingTop: 16 }}>
+              <div style={{ borderTop: '1px solid var(--colorNeutralStroke1)', paddingTop: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <Text weight="semibold">Campos del formulario</Text>
                   <Button size="small" icon={<Add24Regular />} onClick={() => setCampos([...campos, emptyCampo(campos.length + 1)])}>
@@ -621,7 +621,7 @@ export default function Mantenedores() {
                 </div>
 
                 {campos.map((c, idx) => (
-                  <div key={idx} style={{ border: '1px solid #e0e0e0', borderRadius: 8, padding: 12, marginBottom: 12, backgroundColor: '#fafafa' }}>
+                  <div key={idx} style={{ border: '1px solid var(--colorNeutralStroke2)', borderRadius: 8, padding: 12, marginBottom: 12, backgroundColor: 'var(--colorNeutralBackground3)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                       <Text weight="semibold" size={200}>Campo {idx + 1}</Text>
                       {campos.length > 1 && (
@@ -685,7 +685,7 @@ export default function Mantenedores() {
 
             {/* Listado de etapas para creación obligatoria */}
             {!editProcesoId && (
-              <div style={{ borderTop: '1px solid #eee', paddingTop: 16, marginTop: 16 }}>
+              <div style={{ borderTop: '1px solid var(--colorNeutralStroke1)', paddingTop: 16, marginTop: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <Text weight="semibold">Etapas del Proceso</Text>
                   <Button 
@@ -699,19 +699,19 @@ export default function Mantenedores() {
                 </div>
                 
                 {!procesoForm.id_area && (
-                  <Text size={200} style={{ color: 'gray', fontStyle: 'italic' }}>
+                  <Text size={200} style={{ color: 'var(--colorNeutralForeground3)', fontStyle: 'italic' }}>
                     Seleccione un área para poder agregar etapas.
                   </Text>
                 )}
 
                 {procesoForm.id_area && procesoEtapasForm.length === 0 && (
-                  <Text size={200} style={{ color: '#d13438', fontStyle: 'italic' }}>
+                  <Text size={200} style={{ color: 'var(--colorStatusDangerForeground1)', fontStyle: 'italic' }}>
                     Debe agregar al menos una etapa para este proceso.
                   </Text>
                 )}
 
                 {procesoForm.id_area && procesoEtapasForm.map((et, idx) => (
-                  <div key={idx} style={{ border: '1px solid #e0e0e0', borderRadius: 8, padding: 12, marginBottom: 12, backgroundColor: '#fafafa' }}>
+                  <div key={idx} style={{ border: '1px solid var(--colorNeutralStroke2)', borderRadius: 8, padding: 12, marginBottom: 12, backgroundColor: 'var(--colorNeutralBackground3)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                       <Text weight="semibold" size={200}>Etapa #{idx + 1}</Text>
                       <Button size="small" appearance="subtle" icon={<Delete24Regular />} onClick={() => setProcesoEtapasForm(procesoEtapasForm.filter((_, i) => i !== idx))} />

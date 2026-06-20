@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { Button, Input, Field, Text } from '@fluentui/react-components';
+import { WeatherMoon24Regular, WeatherSunny24Regular } from '@fluentui/react-icons';
 import { api } from '../api';
+import { useTheme } from '../components/ThemeContext';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -10,6 +12,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { theme, toggleTheme } = useTheme();
   const justRegistered = (location.state as { registered?: boolean } | null)?.registered === true;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -34,10 +37,19 @@ export default function Login() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: '#f5f5f5'
+      backgroundColor: 'var(--colorNeutralBackground2)',
+      position: 'relative'
     }}>
+      <div style={{ position: 'absolute', top: 16, right: 16 }}>
+        <Button 
+          appearance="subtle" 
+          icon={theme === 'light' ? <WeatherMoon24Regular /> : <WeatherSunny24Regular />} 
+          onClick={toggleTheme}
+          title={theme === 'light' ? "Modo Oscuro" : "Modo Claro"}
+        />
+      </div>
       <form onSubmit={handleSubmit} style={{
-        backgroundColor: 'white',
+        backgroundColor: 'var(--colorNeutralBackground1)',
         padding: 40,
         borderRadius: 8,
         boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
@@ -107,7 +119,7 @@ export default function Login() {
           {loading ? 'Iniciando...' : 'Iniciar Sesión'}
         </Button>
 
-        <Text block style={{ marginTop: 16, textAlign: 'center', fontSize: 13, color: '#666' }}>
+        <Text block style={{ marginTop: 16, textAlign: 'center', fontSize: 13, color: 'var(--colorNeutralForeground3)' }}>
           ¿No tienes cuenta?{' '}
           <Link to="/register" style={{ color: '#0078d4', textDecoration: 'none', fontWeight: 600 }}>
             Regístrate aquí

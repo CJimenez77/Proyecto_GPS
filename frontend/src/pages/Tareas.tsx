@@ -121,7 +121,7 @@ export default function Tareas() {
   };
 
   const cardStyle: React.CSSProperties = {
-    padding: 16, backgroundColor: 'white', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.1)'
+    padding: 16, backgroundColor: 'var(--colorNeutralBackground1)', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.1)'
   };
 
   return (
@@ -130,7 +130,7 @@ export default function Tareas() {
         <Text weight="semibold" size={800}>{isAdmin ? 'Todas las Tareas' : 'Mis Tareas'}</Text>
         {isAdmin && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <Text size={200} style={{ color: 'gray' }}>Filtrar:</Text>
+            <Text size={200} style={{ color: 'var(--colorNeutralForeground4)' }}>Filtrar:</Text>
             <Select value={filtroEstado} onChange={(_, d) => setFiltroEstado(d.value)} style={{ minWidth: 150 }}>
               <option value="">Todos</option>
               <option value="ABIERTA">Abierta</option>
@@ -152,7 +152,7 @@ export default function Tareas() {
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left' }}>
+              <tr style={{ borderBottom: '2px solid var(--colorNeutralStroke1)', textAlign: 'left' }}>
                 <th style={{ padding: 12 }}><Text weight="semibold">Expediente</Text></th>
                 <th style={{ padding: 12 }}><Text weight="semibold">Proyecto</Text></th>
                 {isAdmin && <th style={{ padding: 12 }}><Text weight="semibold">Asignado a</Text></th>}
@@ -164,14 +164,14 @@ export default function Tareas() {
             </thead>
             <tbody>
               {filtered.map(t => (
-                <tr key={t.id} style={{ borderBottom: '1px solid #eee' }}>
+                <tr key={t.id} style={{ borderBottom: '1px solid var(--colorNeutralStroke2)' }}>
                   <td style={{ padding: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <Text weight="semibold">{t.expediente_titulo}</Text>
                       <Badge color="informative" shape="rounded">v{t.expediente_version}</Badge>
                     </div>
                   </td>
-                  <td style={{ padding: 12 }}><Text style={{ color: 'gray' }}>{t.proyecto_nombre}</Text></td>
+                  <td style={{ padding: 12 }}><Text style={{ color: 'var(--colorNeutralForeground4)' }}>{t.proyecto_nombre}</Text></td>
                   {isAdmin && <td style={{ padding: 12 }}><Text>{t.asignado_a_nombre}</Text></td>}
                   <td style={{ padding: 12 }}><Text>{t.etapa_nombre}</Text></td>
                   <td style={{ padding: 12 }}><Text>{new Date(t.created_at).toLocaleString()}</Text></td>
@@ -205,14 +205,14 @@ export default function Tareas() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
               {/* Info del expediente */}
-              <div style={{ padding: 14, backgroundColor: '#f0f4ff', borderRadius: 8, border: '1px solid #c5d0f0' }}>
+              <div style={{ padding: 14, backgroundColor: 'var(--colorBrandBackground2)', borderRadius: 8, border: '1px solid var(--colorBrandStroke1)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
                     <Text weight="semibold" size={400} block>{activeTarea.expediente_titulo}</Text>
-                    <Text size={200} style={{ color: '#555' }} block>Proyecto: {activeTarea.proyecto_nombre}</Text>
-                    <Text size={200} style={{ color: '#555' }} block>Proceso: {(activeTarea as any).proceso_nombre || 'Sin Proceso'}</Text>
-                    <Text size={200} style={{ color: '#555' }} block>Etapa: {activeTarea.etapa_nombre}</Text>
-                    {isAdmin && <Text size={200} style={{ color: '#555' }} block>Asignado a: {activeTarea.asignado_a_nombre}</Text>}
+                    <Text size={200} style={{ color: 'var(--colorNeutralForeground3)' }} block>Proyecto: {activeTarea.proyecto_nombre}</Text>
+                    <Text size={200} style={{ color: 'var(--colorNeutralForeground3)' }} block>Proceso: {(activeTarea as any).proceso_nombre || 'Sin Proceso'}</Text>
+                    <Text size={200} style={{ color: 'var(--colorNeutralForeground3)' }} block>Etapa: {activeTarea.etapa_nombre}</Text>
+                    {isAdmin && <Text size={200} style={{ color: 'var(--colorNeutralForeground3)' }} block>Asignado a: {activeTarea.asignado_a_nombre}</Text>}
                   </div>
                   <Badge color={estadoColors[activeTarea.estado]}>{estadoLabel[activeTarea.estado]}</Badge>
                 </div>
@@ -222,7 +222,7 @@ export default function Tareas() {
               {loadingExp ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Spinner size="tiny" />
-                  <Text size={200} style={{ color: 'gray' }}>Cargando información del documento...</Text>
+                  <Text size={200} style={{ color: 'var(--colorNeutralForeground4)' }}>Cargando información del documento...</Text>
                 </div>
               ) : activeExpediente && (
                 <>
@@ -230,9 +230,9 @@ export default function Tareas() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     <Text weight="semibold" size={300} block>Archivo(s) Adjunto(s)</Text>
                     {downloadUrls.map((item, idx) => (
-                      <div key={idx} style={{ padding: '10px 14px', backgroundColor: '#fff', borderRadius: 8, border: '1px solid #e0e0e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div key={idx} style={{ padding: '10px 14px', backgroundColor: 'var(--colorNeutralBackground1)', borderRadius: 8, border: '1px solid var(--colorNeutralStroke1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden', maxWidth: '75%' }}>
-                          <Text size={200} style={{ color: '#323130', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>📄 {item.nombre_archivo}</Text>
+                          <Text size={200} style={{ color: 'var(--colorNeutralForeground1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>📄 {item.nombre_archivo}</Text>
                         </div>
                         <Button
                           appearance="outline"
@@ -247,7 +247,7 @@ export default function Tareas() {
                     {downloadUrls.length === 0 && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Spinner size="tiny" />
-                        <Text size={200} style={{ color: 'gray' }}>Cargando enlaces de descarga...</Text>
+                        <Text size={200} style={{ color: 'var(--colorNeutralForeground4)' }}>Cargando enlaces de descarga...</Text>
                       </div>
                     )}
                   </div>
@@ -256,13 +256,13 @@ export default function Tareas() {
                   {activeExpediente.respuestas_formulario && activeExpediente.respuestas_formulario.length > 0 && (
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                        <Form24Regular style={{ color: '#0078d4' }} />
+                        <Form24Regular style={{ color: 'var(--colorBrandBackground)' }} />
                         <Text weight="semibold" size={300}>Metadatos del Documento</Text>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: 14, backgroundColor: '#fafafa', borderRadius: 8, border: '1px solid #e8e8e8' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: 14, backgroundColor: 'var(--colorNeutralBackground3)', borderRadius: 8, border: '1px solid var(--colorNeutralStroke1)' }}>
                         {activeExpediente.respuestas_formulario.map(rf => (
-                          <div key={rf.id_campo} style={{ borderLeft: '3px solid #0078d4', paddingLeft: 8 }}>
-                            <Text size={100} style={{ color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }} block>{rf.etiqueta}</Text>
+                          <div key={rf.id_campo} style={{ borderLeft: '3px solid var(--colorBrandBackground)', paddingLeft: 8 }}>
+                            <Text size={100} style={{ color: 'var(--colorNeutralForeground4)', textTransform: 'uppercase', letterSpacing: '0.05em' }} block>{rf.etiqueta}</Text>
                             <Text weight="semibold" size={300} block>{rf.valor || '—'}</Text>
                           </div>
                         ))}
@@ -289,15 +289,15 @@ export default function Tareas() {
         <DrawerFooter>
           <Button appearance="secondary" onClick={() => { setActiveTarea(null); setActiveExpediente(null); }} disabled={isSubmitting}>Cancelar</Button>
           <Button
-            style={{ backgroundColor: '#a80000', color: 'white' }}
+            style={{ backgroundColor: 'var(--colorStatusDangerBackground3)', color: 'white' }}
             icon={<Dismiss24Regular />}
             onClick={() => handleResolveRechazo('definitivo')}
             disabled={isSubmitting || !activeTarea}
           >
-            {isSubmitting ? <Spinner size="extra-tiny" /> : 'Rechazar Definitivamente'}
+            {isSubmitting ? <Spinner size="extra-tiny" /> : 'Rechazar Definitivo'}
           </Button>
           <Button
-            style={{ backgroundColor: '#d13438', color: 'white' }}
+            style={{ backgroundColor: 'var(--colorStatusDangerBackground1)', color: 'var(--colorStatusDangerForeground1)', border: '1px solid var(--colorStatusDangerBorder1)' }}
             icon={<DocumentArrowRight24Regular />}
             onClick={() => handleResolveRechazo('correccion')}
             disabled={isSubmitting || !activeTarea}
@@ -305,7 +305,7 @@ export default function Tareas() {
             {isSubmitting ? <Spinner size="extra-tiny" /> : 'Rechazar y Solicitar Corrección'}
           </Button>
           <Button
-            style={{ backgroundColor: '#107c10', color: 'white' }}
+            style={{ backgroundColor: 'var(--colorStatusSuccessBackground3)', color: 'white' }}
             icon={<Checkmark24Regular />}
             onClick={() => handleResolve('APROBADA')}
             disabled={isSubmitting || !activeTarea}

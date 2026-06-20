@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Text, Badge, Input, Field, Drawer, DrawerHeader, DrawerBody, DrawerFooter, Spinner, Divider } from '@fluentui/react-components';
+import { Button, Text, Badge, Input, Field, Drawer, DrawerHeader, DrawerBody, DrawerFooter, Spinner, Divider, Tab, TabList } from '@fluentui/react-components';
 import { Add24Regular, Search24Regular, FolderOpen24Regular, Form24Regular, Dismiss24Regular, Filter24Regular, Archive24Regular } from '@fluentui/react-icons';
 import { api, getCurrentUser } from '../api';
 import type { Expediente, JerarquiaEmpresa, Formulario } from '../entities';
@@ -30,6 +30,7 @@ export default function Expedientes() {
   const [jerarquia, setJerarquia] = useState<JerarquiaEmpresa[]>([]);
   const [todosFormularios, setTodosFormularios] = useState<Formulario[]>([]);
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'activos' | 'archivados'>('activos');
 
   // Advanced filters state
   const [filterTitulo, setFilterTitulo] = useState('');
@@ -88,6 +89,25 @@ export default function Expedientes() {
     }
   }, [selArea]);
 
+  const loadExpedientes = async (tab: 'activos' | 'archivados') => {
+    try {
+      setLoading(true);
+      const params = tab === 'archivados' 
+        ? { estado: 'ARCHIVADO', incluir_archivados: true } 
+        : {};
+      const exp = await api.getExpedientes(params);
+      setExpedientes(exp);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadExpedientes(activeTab);
+  }, [activeTab]);
+
   useEffect(() => { loadData(); }, []);
 
   const handleArchivar = async (id: number) => {
@@ -100,14 +120,23 @@ export default function Expedientes() {
     }
   };
 
+  const handleDesarchivar = async (id: number) => {
+    if (!window.confirm('¿Está seguro de que desea desarchivar este expediente? Esto lo restaurará a su estado anterior.')) return;
+    try {
+      await api.desarchivarExpediente(id);
+      setExpedientes(prev => prev.filter(e => e.id !== id));
+    } catch (e: any) {
+      alert('Error al desarchivar expediente: ' + e.message);
+    }
+  };
+
   const loadData = async () => {
     try {
-      const [exp, jer, forms] = await Promise.all([
-        api.getExpedientes(),
+      const [, jer, forms] = await Promise.all([
+        loadExpedientes(activeTab),
         api.getJerarquia(),
         api.getFormularios()
       ]);
-      setExpedientes(exp);
       setJerarquia(jer);
       setTodosFormularios(forms);
 
@@ -165,9 +194,10 @@ export default function Expedientes() {
         titulo: filterTitulo || undefined,
         id_proyecto: filterProyecto || undefined,
         id_disciplina: filterDisciplina || undefined,
-        estado: filterEstado || undefined,
+        estado: activeTab === 'archivados' ? 'ARCHIVADO' : (filterEstado || undefined),
         fecha_desde: filterFechaDesde || undefined,
         fecha_hasta: filterFechaHasta || undefined,
+        incluir_archivados: activeTab === 'archivados' ? true : undefined,
       };
       const res = await api.getExpedientes(params);
       setExpedientes(res);
@@ -186,15 +216,7 @@ export default function Expedientes() {
     setFilterEstado('');
     setFilterFechaDesde('');
     setFilterFechaHasta('');
-    try {
-      setLoading(true);
-      const res = await api.getExpedientes();
-      setExpedientes(res);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+    await loadExpedientes(activeTab);
   };
 
   const filtered = expedientes.filter(e =>
@@ -287,7 +309,7 @@ export default function Expedientes() {
   const currentProyecto = currentArea?.proyectos.find(p => p.id === selProyecto);
 
   const cardStyle: React.CSSProperties = {
-    padding: 16, backgroundColor: 'white', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.1)'
+    padding: 16, backgroundColor: 'var(--colorNeutralBackground1)', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.1)'
   };
 
   return (
@@ -300,6 +322,17 @@ export default function Expedientes() {
           </Button>
         )}
       </div>
+
+      {user?.rol === 'administrador' && (
+        <TabList 
+          selectedValue={activeTab} 
+          onTabSelect={(_, data) => setActiveTab(data.value as any)} 
+          style={{ marginBottom: 16 }}
+        >
+          <Tab value="activos">Expedientes Activos</Tab>
+          <Tab value="archivados">Expedientes Archivados</Tab>
+        </TabList>
+      )}
 
       <div style={cardStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 16, flexWrap: 'wrap' }}>
@@ -315,8 +348,8 @@ export default function Expedientes() {
 
         {showAdvancedFilters && (
           <div style={{ 
-            backgroundColor: '#fafafa', 
-            border: '1px solid #e2e8f0', 
+            backgroundColor: 'var(--colorNeutralBackground3)', 
+            border: '1px solid var(--colorNeutralStroke1)', 
             borderRadius: 6, 
             padding: 16, 
             marginBottom: 20,
@@ -343,14 +376,16 @@ export default function Expedientes() {
                 </select>
               </Field>
 
-              <Field label="Estado">
-                <select style={selectStyle} value={filterEstado} onChange={e => setFilterEstado(e.target.value)}>
-                  <option value="">Todos</option>
-                  <option value="PENDIENTE">Pendiente</option>
-                  <option value="APROBADO">Aprobado</option>
-                  <option value="RECHAZADO">Rechazado</option>
-                </select>
-              </Field>
+              {activeTab !== 'archivados' && (
+                <Field label="Estado">
+                  <select style={selectStyle} value={filterEstado} onChange={e => setFilterEstado(e.target.value)}>
+                    <option value="">Todos</option>
+                    <option value="PENDIENTE">Pendiente</option>
+                    <option value="APROBADO">Aprobado</option>
+                    <option value="RECHAZADO">Rechazado</option>
+                  </select>
+                </Field>
+              )}
 
               <Field label="Desde (Fecha)">
                 <input type="date" style={selectStyle} value={filterFechaDesde} onChange={e => setFilterFechaDesde(e.target.value)} />
@@ -370,16 +405,16 @@ export default function Expedientes() {
           </div>
         )}
         {filtered.length === 0 ? (
-          <Text>No hay expedientes</Text>
+          <Text style={{ color: 'var(--colorNeutralForeground4)', display: 'block', padding: 8 }}>No hay expedientes</Text>
         ) : (
           filtered.map(exp => (
-            <div key={exp.id} style={{ padding: '12px 16px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div key={exp.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--colorNeutralStroke2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <Text weight="semibold">{exp.titulo}</Text>
-                <Text block style={{ color: 'gray', fontSize: 12 }}>Versión {exp.version} • {getNombreArchivoDisplay(exp.nombre_archivo)}</Text>
+                <Text block style={{ color: 'var(--colorNeutralForeground4)', fontSize: 12 }}>Versión {exp.version} • {getNombreArchivoDisplay(exp.nombre_archivo)}</Text>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Text style={{ fontSize: 12, marginRight: 8 }}>{new Date(exp.created_at).toLocaleDateString()}</Text>
+                <Text style={{ fontSize: 12, marginRight: 8, color: 'var(--colorNeutralForeground4)' }}>{new Date(exp.created_at).toLocaleDateString()}</Text>
                 <Badge appearance="filled" color={estadoColors[exp.estado] || 'neutral'} style={{ marginRight: 8 }}>{estadoLabel[exp.estado] || exp.estado}</Badge>
                 <Button icon={<FolderOpen24Regular />} appearance="subtle" onClick={() => navigate(`/expedientes/${exp.id}`)}>
                   Abrir
@@ -387,6 +422,11 @@ export default function Expedientes() {
                 {user?.rol === 'administrador' && exp.estado !== 'ARCHIVADO' && (
                   <Button icon={<Archive24Regular />} appearance="subtle" onClick={() => handleArchivar(exp.id)}>
                     Archivar
+                  </Button>
+                )}
+                {user?.rol === 'administrador' && exp.estado === 'ARCHIVADO' && (
+                  <Button icon={<Archive24Regular />} appearance="subtle" onClick={() => handleDesarchivar(exp.id)}>
+                    Desarchivar
                   </Button>
                 )}
               </div>
@@ -430,15 +470,15 @@ export default function Expedientes() {
                 {loadingProcesos ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
                     <Spinner size="tiny" />
-                    <Text size={200} style={{ color: 'gray' }}>Cargando procesos de aprobación...</Text>
+                    <Text size={200} style={{ color: 'var(--colorNeutralForeground4)' }}>Cargando procesos de aprobación...</Text>
                   </div>
                 ) : procesosArea.length === 0 ? (
                   <div style={{ 
                     padding: '12px 16px', 
-                    backgroundColor: '#fff4f4', 
-                    color: '#d13438', 
+                    backgroundColor: 'var(--colorStatusDangerBackground1)', 
+                    color: 'var(--colorStatusDangerForeground1)', 
                     borderRadius: 8, 
-                    border: '1px solid #fde7e9',
+                    border: '1px solid var(--colorStatusDangerBorder1)',
                     fontSize: 13,
                     fontWeight: 500,
                     lineHeight: '1.4'
@@ -464,7 +504,7 @@ export default function Expedientes() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Field label="Proyecto" required>
-                <select style={selectStyle} value={selProyecto} onChange={e => { setSelProyecto(Number(e.target.value)); setSelDisciplina(0); }}>
+                <select style={selectStyle} value={selProyecto} onChange={e => { setSelEmpresa(selEmpresa); setSelArea(selArea); setSelProyecto(Number(e.target.value)); setSelDisciplina(0); }}>
                   <option value={0}>Seleccionar...</option>
                   {currentArea?.proyectos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                 </select>
@@ -485,17 +525,17 @@ export default function Expedientes() {
                 {loadingForm ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Spinner size="tiny" />
-                    <Text size={200} style={{ color: 'gray' }}>Buscando formulario de metadatos...</Text>
+                    <Text size={200} style={{ color: 'var(--colorNeutralForeground4)' }}>Buscando formulario de metadatos...</Text>
                   </div>
                 ) : formulario ? (
                   // ✅ Formulario auto-detectado o elegido manualmente
-                  <div style={{ borderRadius: 8, border: '1px solid #c5d0f0', overflow: 'hidden' }}>
-                    <div style={{ padding: '10px 14px', backgroundColor: '#e8f0fe', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ borderRadius: 8, border: '1px solid var(--colorBrandStroke1)', overflow: 'hidden' }}>
+                    <div style={{ padding: '10px 14px', backgroundColor: 'var(--colorBrandBackground2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Form24Regular style={{ color: '#0078d4' }} />
+                        <Form24Regular style={{ color: 'var(--colorBrandBackground)' }} />
                         <div>
                           <Text weight="semibold" size={300}>{formulario.nombre}</Text>
-                          <Text size={100} block style={{ color: '#555' }}>{formulario.campos.length} campo(s) — Complete los metadatos del documento</Text>
+                          <Text size={100} block style={{ color: 'var(--colorNeutralForeground3)' }}>{formulario.campos.length} campo(s) — Complete los metadatos del documento</Text>
                         </div>
                       </div>
                       <Button
@@ -506,7 +546,7 @@ export default function Expedientes() {
                         onClick={() => { setFormulario(null); setRespuestas({}); setSelFormManual(0); setMostrarSelectorForm(false); }}
                       />
                     </div>
-                    <div style={{ padding: 14, backgroundColor: 'white', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ padding: 14, backgroundColor: 'var(--colorNeutralBackground1)', display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {formulario.campos.map(c => (
                         <Field key={c.id} label={c.etiqueta} required={c.requerido} hint={!c.requerido ? 'Opcional' : undefined}>
                           {c.tipo === 'lista' ? (
@@ -525,10 +565,10 @@ export default function Expedientes() {
                   </div>
                 ) : formularioBuscado && !mostrarSelectorForm ? (
                   // ℹ️ Sin formulario auto-detectado → ofrecer agregar uno
-                  <div style={{ padding: 14, backgroundColor: '#fafafa', borderRadius: 8, border: '1px dashed #ccc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ padding: 14, backgroundColor: 'var(--colorNeutralBackground3)', borderRadius: 8, border: '1px dashed var(--colorNeutralStroke1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                       <Text weight="semibold" size={300} block>Sin formulario de metadatos configurado</Text>
-                      <Text size={200} style={{ color: 'gray' }}>El documento se subirá sin campos adicionales.</Text>
+                      <Text size={200} style={{ color: 'var(--colorNeutralForeground4)' }}>El documento se subirá sin campos adicionales.</Text>
                     </div>
                     {todosFormularios.length > 0 && (
                       <Button size="small" appearance="outline" icon={<Form24Regular />} onClick={() => setMostrarSelectorForm(true)}>
@@ -538,7 +578,7 @@ export default function Expedientes() {
                   </div>
                 ) : mostrarSelectorForm ? (
                   // 🗂️ Selector manual de formulario
-                  <div style={{ padding: 14, backgroundColor: '#fff4ce', borderRadius: 8, border: '1px solid #fbdc81' }}>
+                  <div style={{ padding: 14, backgroundColor: 'var(--colorStatusWarningBackground1)', borderRadius: 8, border: '1px solid var(--colorStatusWarningBorder1)' }}>
                     <Text weight="semibold" size={300} block style={{ marginBottom: 10 }}>Seleccionar formulario de metadatos</Text>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       <select
@@ -581,13 +621,13 @@ export default function Expedientes() {
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         padding: '6px 10px',
-                        backgroundColor: '#f3f2f1',
+                        backgroundColor: 'var(--colorNeutralBackground3)',
                         borderRadius: 4,
-                        borderLeft: '3px solid #0078d4',
+                        borderLeft: '3px solid var(--colorBrandBackground)',
                       }}
                     >
-                      <Text size={200} style={{ color: '#323130', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '85%' }}>
-                        📄 {file.name} <span style={{ color: '#605e5c', marginLeft: 6 }}>({(file.size / (1024 * 1024)).toFixed(2)} MB)</span>
+                      <Text size={200} style={{ color: 'var(--colorNeutralForeground1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '85%' }}>
+                        📄 {file.name} <span style={{ color: 'var(--colorNeutralForeground4)', marginLeft: 6 }}>({(file.size / (1024 * 1024)).toFixed(2)} MB)</span>
                       </Text>
                       <Button
                         size="small"
@@ -619,5 +659,12 @@ export default function Expedientes() {
 }
 
 const selectStyle: React.CSSProperties = {
-  width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #d1d1d1', fontFamily: 'inherit', fontSize: 14
+  width: '100%', 
+  padding: '6px 8px', 
+  borderRadius: 4, 
+  border: '1px solid var(--colorNeutralStroke1)', 
+  backgroundColor: 'var(--colorNeutralBackground1)',
+  color: 'var(--colorNeutralForeground1)',
+  fontFamily: 'inherit', 
+  fontSize: 14
 };

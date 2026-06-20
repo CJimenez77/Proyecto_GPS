@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Button, Text, Avatar, Badge } from '@fluentui/react-components';
-import { Home24Regular, Document24Regular, People24Regular, SignOut24Regular, CheckmarkSquare24Regular, Settings24Regular, Alert24Regular } from '@fluentui/react-icons';
+import { Home24Regular, Document24Regular, People24Regular, SignOut24Regular, CheckmarkSquare24Regular, Settings24Regular, Alert24Regular, WeatherMoon24Regular, WeatherSunny24Regular } from '@fluentui/react-icons';
 import { api, getCurrentUser } from '../api';
+import { useTheme } from './ThemeContext';
 
 export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const user = getCurrentUser();
+  const { theme, toggleTheme } = useTheme();
 
   const [unreadCount, setUnreadCount] = useState(0);
   const [recentTasks, setRecentTasks] = useState<any[]>([]);
@@ -55,7 +57,7 @@ export default function Layout() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '12px 16px', backgroundColor: '#fff', borderBottom: '1px solid #e0e0e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative' }}>
+      <div style={{ padding: '12px 16px', backgroundColor: 'var(--colorNeutralBackground1)', borderBottom: '1px solid var(--colorNeutralStroke1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative' }}>
         <Text weight="semibold">GPS - Gestión de Proyectos</Text>
         <div style={{ display: 'flex', gap: 8 }}>
           {navItems.map((item) => (
@@ -64,7 +66,7 @@ export default function Layout() {
               appearance="subtle"
               onClick={() => navigate(item.path)}
               style={{
-                backgroundColor: location.pathname.startsWith(item.path) && (item.path !== '/' || location.pathname === '/') ? '#f0f0f0' : undefined
+                backgroundColor: location.pathname.startsWith(item.path) && (item.path !== '/' || location.pathname === '/') ? 'var(--colorNeutralBackground3)' : undefined
               }}
             >
               {item.icon}
@@ -104,19 +106,19 @@ export default function Layout() {
                   top: 40,
                   right: 0,
                   width: 300,
-                  backgroundColor: 'white',
-                  border: '1px solid #e0e0e0',
+                  backgroundColor: 'var(--colorNeutralBackground1)',
+                  border: '1px solid var(--colorNeutralStroke1)',
                   borderRadius: 8,
                   boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                   zIndex: 1000,
                   padding: 12
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #eee', paddingBottom: 8, marginBottom: 8, alignItems: 'center' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--colorNeutralStroke2)', paddingBottom: 8, marginBottom: 8, alignItems: 'center' }}>
                     <Text weight="semibold">Tareas Pendientes ({unreadCount})</Text>
                     <Button size="small" appearance="subtle" onClick={() => { setShowDropdown(false); navigate('/tareas'); }}>Ver todas</Button>
                   </div>
                   {recentTasks.length === 0 ? (
-                    <div style={{ padding: '8px 0', textAlign: 'center', color: 'gray', fontSize: 13 }}>No tienes tareas pendientes</div>
+                    <div style={{ padding: '8px 0', textAlign: 'center', color: 'var(--colorNeutralForeground4)', fontSize: 13 }}>No tienes tareas pendientes</div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 300, overflowY: 'auto' }}>
                       {recentTasks.map((t) => (
@@ -126,8 +128,8 @@ export default function Layout() {
                           style={{
                             padding: 8,
                             borderRadius: 4,
-                            backgroundColor: t.estado === 'ABIERTA' ? '#f0f7ff' : '#fafafa',
-                            borderLeft: t.estado === 'ABIERTA' ? '3px solid #0078d4' : '3px solid #ccc',
+                            backgroundColor: t.estado === 'ABIERTA' ? (theme === 'light' ? '#f0f7ff' : '#0f2c59') : 'var(--colorNeutralBackground3)',
+                            borderLeft: t.estado === 'ABIERTA' ? '3px solid var(--colorBrandBackground)' : '3px solid var(--colorNeutralStroke1)',
                             cursor: 'pointer'
                           }}
                         >
@@ -138,7 +140,7 @@ export default function Layout() {
                             <Badge appearance="tint" color={t.estado === 'ABIERTA' ? 'brand' : 'neutral'} size="small">
                               {t.etapa_nombre || 'Pendiente'}
                             </Badge>
-                            <Text size={100} style={{ color: 'gray' }}>
+                            <Text size={100} style={{ color: 'var(--colorNeutralForeground4)' }}>
                               Ver. {t.expediente_version}
                             </Text>
                           </div>
@@ -151,11 +153,18 @@ export default function Layout() {
             </div>
           )}
 
+          <Button 
+            appearance="subtle" 
+            icon={theme === 'light' ? <WeatherMoon24Regular /> : <WeatherSunny24Regular />} 
+            onClick={toggleTheme} 
+            title={theme === 'light' ? "Modo Oscuro" : "Modo Claro"}
+          />
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Avatar name={user?.nombre || 'Usuario'} size={28} />
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <Text weight="semibold" size={200}>{user?.nombre}</Text>
-              <Text size={200} style={{ color: 'gray' }}>{user?.rol}</Text>
+              <Text size={200} style={{ color: 'var(--colorNeutralForeground4)' }}>{user?.rol}</Text>
             </div>
           </div>
           <Button appearance="subtle" icon={<SignOut24Regular />} onClick={handleLogout}>
@@ -163,7 +172,7 @@ export default function Layout() {
           </Button>
         </div>
       </div>
-      <main style={{ flex: 1, padding: 24, backgroundColor: '#f5f5f5' }}>
+      <main style={{ flex: 1, padding: 24, backgroundColor: 'var(--colorNeutralBackground2)' }}>
         <Outlet />
       </main>
     </div>
