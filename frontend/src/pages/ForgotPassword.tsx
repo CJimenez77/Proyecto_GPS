@@ -1,9 +1,18 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, Input, Field, Text } from '@fluentui/react-components';
-import { WeatherMoon24Regular, WeatherSunny24Regular } from '@fluentui/react-icons';
 import { api } from '../api';
 import { useTheme } from '../components/ThemeContext';
+
+const IconSun = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+  </svg>
+);
+const IconMoon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+  </svg>
+);
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -29,104 +38,103 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'var(--colorNeutralBackground2)',
-      padding: 24,
-      position: 'relative'
-    }}>
-      <div style={{ position: 'absolute', top: 16, right: 16 }}>
-        <Button 
-          appearance="subtle" 
-          icon={theme === 'light' ? <WeatherMoon24Regular /> : <WeatherSunny24Regular />} 
-          onClick={toggleTheme}
-          title={theme === 'light' ? "Modo Oscuro" : "Modo Claro"}
-        />
+    <div className="auth-page">
+      <div className="auth-bg">
+        <div className="auth-bg-orb auth-bg-orb-1" />
+        <div className="auth-bg-orb auth-bg-orb-2" />
       </div>
-      <form onSubmit={handleSubmit} style={{
-        backgroundColor: 'var(--colorNeutralBackground1)',
-        padding: 40,
-        borderRadius: 12,
-        boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-        width: 400,
-        height: 'fit-content'
-      }}>
-        <Text weight="semibold" size={600} block style={{ marginBottom: 8, textAlign: 'center', color: 'var(--colorNeutralForeground1)' }}>
-          Recuperar Contraseña
-        </Text>
-        <Text block style={{ textAlign: 'center', color: 'var(--colorNeutralForeground3)', fontSize: 13, marginBottom: 24 }}>
-          Sistema de Gestión Documental
-        </Text>
 
-        {success ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{
-              backgroundColor: theme === 'light' ? '#dff6dd' : '#0a3a0a',
-              border: '1px solid ' + (theme === 'light' ? '#107c10' : '#107c10'),
-              borderRadius: 6,
-              padding: '14px',
-            }}>
-              <Text style={{ color: theme === 'light' ? '#107c10' : '#4df04d', fontSize: 13, display: 'block', lineHeight: '1.5', fontWeight: 500 }}>
-                ✅ {success}
-              </Text>
-            </div>
-            
-            <Text block style={{ fontSize: 13, color: 'var(--colorNeutralForeground2)', textAlign: 'center', lineHeight: '1.6' }}>
-              Por favor, revisa tu bandeja de entrada y sigue las instrucciones para restablecer tu contraseña.
-            </Text>
-
-            <Text block style={{ textAlign: 'center', marginTop: 12 }}>
-              <Link to="/login" style={{ color: '#0078d4', textDecoration: 'none', fontWeight: 600, fontSize: 13 }}>
-                Volver al Iniciar Sesión
-              </Link>
-            </Text>
+      <div className="auth-left">
+        <div className="auth-left-logo">
+          <div className="auth-left-logo-icon" style={{ width: 48, height: 48, background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/>
+            </svg>
           </div>
-        ) : (
-          <>
-            {error && (
-              <div style={{
-                backgroundColor: theme === 'light' ? '#fde7e9' : '#3d1619',
-                border: '1px solid ' + (theme === 'light' ? '#f1707a' : '#a22029'),
-                borderRadius: 6,
-                padding: '12px 14px',
-                marginBottom: 16,
-              }}>
-                <Text style={{ color: theme === 'light' ? '#d13438' : '#f88086', fontSize: 13 }}>{error}</Text>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: 'white' }}>SGD</div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Sistema Gestión Documental</div>
+          </div>
+        </div>
+
+        <h1 className="auth-left-heading">
+          Recupera tu<br />
+          <span>acceso al sistema</span>
+        </h1>
+        <p className="auth-left-sub">
+          Ingresa tu correo electrónico y te enviaremos las instrucciones para restablecer tu contraseña de forma segura.
+        </p>
+      </div>
+
+      <div className="auth-right">
+        <button
+          className="theme-toggle"
+          onClick={toggleTheme}
+          style={{ position: 'absolute', top: 20, right: 20, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.6)' }}
+        >
+          {theme === 'light' ? <IconMoon /> : <IconSun />}
+        </button>
+
+        <div className="auth-card fade-in">
+          <h2 className="auth-title">Recuperar Contraseña</h2>
+          <p className="auth-subtitle">Te enviaremos un enlace de recuperación a tu correo</p>
+
+          {success ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div className="auth-alert success">
+                <span>✓</span>
+                <span>{success}</span>
               </div>
-            )}
-
-            <Field label="Correo electrónico" required hint="Ingrese el correo electrónico asociado a su cuenta.">
-              <Input
-                type="email"
-                value={email}
-                onChange={(_e, data) => setEmail(data.value)}
-                placeholder="correo@ejemplo.cl"
-                required
-                style={{ width: '100%' }}
-              />
-            </Field>
-
-            <Button
-              type="submit"
-              appearance="primary"
-              disabled={loading}
-              style={{ marginTop: 24, width: '100%', height: 38 }}
-            >
-              {loading ? 'Enviando solicitud...' : 'Enviar Instrucciones'}
-            </Button>
-
-            <Text block style={{ marginTop: 20, textAlign: 'center', fontSize: 13, color: 'var(--colorNeutralForeground3)' }}>
-              ¿Recordaste tu contraseña?{' '}
-              <Link to="/login" style={{ color: '#0078d4', textDecoration: 'none', fontWeight: 600 }}>
-                Inicia sesión aquí
+              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', lineHeight: 1.6, textAlign: 'center' }}>
+                Revisa tu bandeja de entrada y sigue las instrucciones del correo para restablecer tu contraseña.
+              </p>
+              <Link to="/login" className="auth-btn" style={{ textAlign: 'center', marginTop: 8, display: 'block' }}>
+                Volver a Iniciar Sesión
               </Link>
-            </Text>
-          </>
-        )}
-      </form>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit}>
+              {error && (
+                <div className="auth-alert error">
+                  <span>✕</span>
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <div className="auth-form-group">
+                <label className="auth-label">Correo electrónico</label>
+                <input
+                  className="auth-input"
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="correo@ejemplo.cl"
+                  required
+                />
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>Ingresa el correo asociado a tu cuenta</span>
+              </div>
+
+              <button
+                type="submit"
+                className="auth-btn"
+                disabled={loading}
+              >
+                {loading ? (
+                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                    <span style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
+                    Enviando instrucciones...
+                  </span>
+                ) : 'Enviar Instrucciones'}
+              </button>
+
+              <p className="auth-link-text">
+                ¿Recordaste tu contraseña?{' '}
+                <Link to="/login" className="auth-link">Inicia sesión aquí</Link>
+              </p>
+            </form>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

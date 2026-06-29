@@ -13,7 +13,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem('theme');
-    return (saved as Theme) || 'light';
+    return (saved as Theme) || 'dark';
   });
 
   const toggleTheme = () => {
@@ -26,23 +26,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (theme === 'dark') {
-      document.body.classList.add('dark-mode');
-      document.body.style.backgroundColor = 'var(--colorNeutralBackground2)';
-      document.body.style.color = 'var(--colorNeutralForeground1)';
+      document.documentElement.setAttribute('data-theme', 'dark');
       document.documentElement.style.colorScheme = 'dark';
     } else {
-      document.body.classList.remove('dark-mode');
-      document.body.style.backgroundColor = '';
-      document.body.style.color = '';
+      document.documentElement.setAttribute('data-theme', 'light');
       document.documentElement.style.colorScheme = 'light';
     }
   }, [theme]);
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
-      <FluentProvider 
-        theme={theme === 'light' ? webLightTheme : webDarkTheme} 
-        style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}
+      <FluentProvider
+        theme={theme === 'light' ? webLightTheme : webDarkTheme}
+        style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'transparent' }}
       >
         {children}
       </FluentProvider>
