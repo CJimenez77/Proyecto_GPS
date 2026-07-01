@@ -14,6 +14,7 @@ import Usuarios from './pages/Usuarios'
 import Tareas from './pages/Tareas'
 import Mantenedores from './pages/Mantenedores'
 import Layout from './components/Layout'
+import Explorador from './pages/Explorador'
 import './index.css'
 
 function getCurrentUserRole(): string | null {
@@ -77,6 +78,7 @@ function App() {
           <Route element={<RoleRoute roles={['administrador']} />}>
             <Route path="usuarios" element={<Usuarios />} />
             <Route path="mantenedores" element={<Mantenedores />} />
+            <Route path="explorador" element={<Explorador />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
