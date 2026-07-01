@@ -10,7 +10,7 @@ const estadoColors: Record<Expediente['estado'], "neutral" | "warning" | "inform
 };
 
 const estadoLabel: Record<string, string> = {
-  PENDIENTE: 'Pendiente', APROBADO: 'Aprobado', RECHAZADO: 'Rechazado (Requiere Corrección)', RECHAZADO_DEFINITIVO: 'Rechazado Definitivo', ARCHIVADO: 'Archivado'
+  PENDIENTE: 'Pendiente', APROBADO: 'Aprobado', RECHAZADO: 'Rechazado (Espera Corrección)', RECHAZADO_DEFINITIVO: 'Rechazado Definitivo', ARCHIVADO: 'Archivado'
 };
 
 const getNombreArchivoDisplay = (nombre: string) => {
@@ -382,7 +382,8 @@ export default function Expedientes() {
                     <option value="">Todos</option>
                     <option value="PENDIENTE">Pendiente</option>
                     <option value="APROBADO">Aprobado</option>
-                    <option value="RECHAZADO">Rechazado</option>
+                    <option value="RECHAZADO">Rechazado (Espera Corrección)</option>
+                    <option value="RECHAZADO_DEFINITIVO">Rechazado Definitivo</option>
                   </select>
                 </Field>
               )}

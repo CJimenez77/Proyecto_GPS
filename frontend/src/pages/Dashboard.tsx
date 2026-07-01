@@ -35,12 +35,16 @@ const CHART_COLORS = {
   APROBADO: '#10b981',
   PENDIENTE: '#f59e0b',
   RECHAZADO: '#ef4444',
+  RECHAZADO_DEFINITIVO: '#b91c1c',
+  ARCHIVADO: '#6b7280',
 };
 
 const PIE_GRADIENT_IDS = {
   APROBADO: 'gradAprobado',
   PENDIENTE: 'gradPendiente',
   RECHAZADO: 'gradRechazado',
+  RECHAZADO_DEFINITIVO: 'gradRechazadoDefinitivo',
+  ARCHIVADO: 'gradArchivado',
 };
 
 function getBadgeClass(estado: string) {
@@ -48,6 +52,8 @@ function getBadgeClass(estado: string) {
     PENDIENTE: 'badge-warning',
     APROBADO: 'badge-success',
     RECHAZADO: 'badge-danger',
+    RECHAZADO_DEFINITIVO: 'badge-danger',
+    ARCHIVADO: 'badge-neutral',
   };
   return map[estado] || 'badge-neutral';
 }
@@ -56,7 +62,9 @@ function getBadgeText(estado: string): string {
   const texts: Record<string, string> = {
     PENDIENTE: 'Pendiente',
     APROBADO: 'Aprobado',
-    RECHAZADO: 'Rechazado',
+    RECHAZADO: 'Rechazado (Espera Corrección)',
+    RECHAZADO_DEFINITIVO: 'Rechazado Definitivo',
+    ARCHIVADO: 'Archivado',
   };
   return texts[estado] || estado;
 }
@@ -125,12 +133,14 @@ export default function Dashboard() {
     total: expedientes.length,
     pendiente: expedientes.filter(e => e.estado === 'PENDIENTE').length,
     aprobado: expedientes.filter(e => e.estado === 'APROBADO').length,
-    rechazado: expedientes.filter(e => e.estado === 'RECHAZADO').length,
+    rechazado: expedientes.filter(e => e.estado === 'RECHAZADO' || e.estado === 'RECHAZADO_DEFINITIVO').length,
   };
 
   const filteredExpedientes = selectedTab === 'todos'
     ? expedientes
-    : expedientes.filter(e => e.estado === selectedTab);
+    : selectedTab === 'RECHAZADO'
+      ? expedientes.filter(e => e.estado === 'RECHAZADO' || e.estado === 'RECHAZADO_DEFINITIVO')
+      : expedientes.filter(e => e.estado === selectedTab);
 
   const pieData = statsData?.estados.map(item => ({
     name: getBadgeText(item.estado),
@@ -233,6 +243,12 @@ export default function Dashboard() {
                         </linearGradient>
                         <linearGradient id="gradRechazado" x1="0" y1="0" x2="1" y2="1">
                           <stop offset="0%" stopColor="#ef4444" /><stop offset="100%" stopColor="#dc2626" />
+                        </linearGradient>
+                        <linearGradient id="gradRechazadoDefinitivo" x1="0" y1="0" x2="1" y2="1">
+                          <stop offset="0%" stopColor="#b91c1c" /><stop offset="100%" stopColor="#991b1b" />
+                        </linearGradient>
+                        <linearGradient id="gradArchivado" x1="0" y1="0" x2="1" y2="1">
+                          <stop offset="0%" stopColor="#9ca3af" /><stop offset="100%" stopColor="#4b5563" />
                         </linearGradient>
                       </defs>
                       <Pie

@@ -17,7 +17,7 @@ const estadoColors: Record<string, "neutral" | "warning" | "success" | "danger" 
 };
 
 const estadoLabel: Record<string, string> = {
-  PENDIENTE: 'Pendiente de Revisión', APROBADO: 'Aprobado', RECHAZADO: 'Rechazado (Requiere Corrección)', RECHAZADO_DEFINITIVO: 'Rechazado Definitivo', ARCHIVADO: 'Archivado'
+  PENDIENTE: 'Pendiente de Revisión', APROBADO: 'Aprobado', RECHAZADO: 'Rechazado (Espera Corrección)', RECHAZADO_DEFINITIVO: 'Rechazado Definitivo', ARCHIVADO: 'Archivado'
 };
 
 export default function ExpedienteDetail() {
