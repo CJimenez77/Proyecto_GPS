@@ -17,7 +17,10 @@ const getNombreArchivoDisplay = (nombre: string) => {
   try {
     if (nombre.startsWith('[')) {
       const arr = JSON.parse(nombre) as string[];
-      return `${arr.length} archivos: ${arr.join(', ')}`;
+      if (arr.length === 1) {
+        return `1 archivo: ${arr[0]}`;
+      }
+      return `${arr.length} archivos`;
     }
   } catch {}
   return nombre;
